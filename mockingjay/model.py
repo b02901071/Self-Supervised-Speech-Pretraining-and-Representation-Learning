@@ -34,6 +34,7 @@ class MockingjayConfig(object):
         self.attention_probs_dropout_prob = config['mockingjay']['attention_probs_dropout_prob']
         self.initializer_range = config['mockingjay']['initializer_range']
         self.layer_norm_eps = float(config['mockingjay']['layer_norm_eps'])
+        self.attn_max_span = config['mockingjay']['attn_max_span']
 
 
 def prune_linear_layer(layer, index, dim=0):
@@ -145,7 +146,7 @@ class MockingjaySelfAttention(nn.Module):
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
 
-    def forward(self, hidden_states, attention_mask, head_mask=None):
+    def forward(self, hidden_states, attention_mask, head_mask=None, attnspan_mask=None):
         mixed_query_layer = self.query(hidden_states)
         mixed_key_layer = self.key(hidden_states)
         mixed_value_layer = self.value(hidden_states)
@@ -162,6 +163,7 @@ class MockingjaySelfAttention(nn.Module):
         # Apply the attention mask is (precomputed for all layers in MockingjayModel forward() function)
         attention_scores = attention_scores + attention_mask
         # attention_scores: (batch_size, head_num, seqlen, seqlen)
+        attention_scores = attention_scores + attnspan_mask.unsqueeze(0).unsqueeze(0)
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
@@ -227,8 +229,8 @@ class MockingjayAttention(nn.Module):
         self.self.num_attention_heads = self.self.num_attention_heads - len(heads)
         self.self.all_head_size = self.self.attention_head_size * self.self.num_attention_heads
 
-    def forward(self, input_tensor, attention_mask, head_mask=None):
-        self_output = self.self(input_tensor, attention_mask, head_mask)
+    def forward(self, input_tensor, attention_mask, head_mask=None, attnspan_mask=None):
+        self_output = self.self(input_tensor, attention_mask, head_mask, attnspan_mask)
         if self.output_attentions:
             attentions, self_output = self_output
         attention_output = self.output(self_output, input_tensor)
@@ -275,8 +277,8 @@ class MockingjayLayer(nn.Module):
         self.intermediate = MockingjayIntermediate(config)
         self.output = MockingjayOutput(config)
 
-    def forward(self, hidden_states, attention_mask, head_mask=None):
-        attention_output = self.attention(hidden_states, attention_mask, head_mask)
+    def forward(self, hidden_states, attention_mask, head_mask=None, attnspan_mask=None):
+        attention_output = self.attention(hidden_states, attention_mask, head_mask, attnspan_mask)
         if self.output_attentions:
             attentions, attention_output = attention_output
         intermediate_output = self.intermediate(attention_output)
@@ -294,11 +296,11 @@ class MockingjayEncoder(nn.Module):
                                   keep_multihead_output=keep_multihead_output)
         self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_hidden_layers)])
 
-    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, head_mask=None):
+    def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, head_mask=None, attnspan_mask=None):
         all_encoder_layers = []
         all_attentions = []
         for i, layer_module in enumerate(self.layer):
-            hidden_states = layer_module(hidden_states, attention_mask, head_mask[i])
+            hidden_states = layer_module(hidden_states, attention_mask, head_mask[i], attnspan_mask)
             if self.output_attentions:
                 attentions, hidden_states = hidden_states
                 all_attentions.append(attentions)
@@ -452,11 +454,20 @@ class MockingjayModel(MockingjayInitModel):
         else:
             head_mask = [None] * self.config.num_hidden_layers
 
+        seqlen = spec_input.size(-2)
+        attnspan_mask = torch.zeros(seqlen, seqlen).to(spec_input.device)
+        if self.config.attn_max_span != 'None':
+            assert type(self.config.attn_max_span) is int
+            upper_indices = torch.triu_indices(seqlen, seqlen, self.config.attn_max_span)
+            lower_indices = torch.tril_indices(seqlen, seqlen, -self.config.attn_max_span)
+            attnspan_mask[torch.cat([upper_indices, lower_indices], dim=1).chunk(2)] = -10000.0
+
         input_representations = self.input_representations(spec_input, pos_enc)
         encoded_layers = self.encoder(input_representations,
                                       extended_attention_mask,
                                       output_all_encoded_layers=output_all_encoded_layers,
-                                      head_mask=head_mask)
+                                      head_mask=head_mask,
+                                      attnspan_mask=attnspan_mask)
         if self.output_attentions:
             all_attentions, encoded_layers = encoded_layers
         if not output_all_encoded_layers:
