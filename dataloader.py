@@ -22,7 +22,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
 from utility.asr import zero_padding,target_padding
 from utility.mam import process_train_MAM_data, process_test_MAM_data
-from ipdb import set_trace
 
 
 ############
@@ -860,7 +859,7 @@ def get_Dataloader(split, load, data_path, batch_size, max_timestep, max_label_l
     elif load == 'speaker':
         sets = train_set[0].replace('360', '100') # Use the `train-clean-100` set instead of the `train-clean-360`
         ds = Mel_Speaker_Dataset(split=split, run_mockingjay=run_mockingjay, file_path=data_path, sets=sets, max_timestep=max_timestep, load=load,
-                                 max_label_len=max_label_len, bucket_size=64, drop=drop_too_long, mock_config=mock_config)
+                                 max_label_len=max_label_len, bucket_size=bs, drop=drop_too_long, mock_config=mock_config)
     else:
         raise NotImplementedError('Invalid `load` argument for `get_Dataloader()`!')
 
