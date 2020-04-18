@@ -25,6 +25,7 @@ optimizer:
   warmup_proportion: 0.07                               # Proportion of training to perform linear rate warmup.
   gradient_accumulation_steps: 1                        # Number of updates steps to accumulate before performing a backward/update pass
   gradient_clipping: 1.0                                # Maximum gradient norm
+  eps: 1.0e-6
 
 
 dataloader:

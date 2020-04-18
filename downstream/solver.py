@@ -136,7 +136,8 @@ class Downstream_Solver(Solver):
             self.optimizer = get_mockingjay_optimizer(params=param_optimizer, 
                                                       lr=self.learning_rate, 
                                                       warmup_proportion=self.config['optimizer']['warmup_proportion'],
-                                                      training_steps=self.total_steps)
+                                                      training_steps=self.total_steps,
+                                                      eps=self.config['optimizer']['eps'])
         elif not inference:
             self.optimizer = Adam(self.classifier.parameters(), lr=self.learning_rate, betas=(0.9, 0.999))
             self.classifier.train()
@@ -473,7 +474,7 @@ class Downstream_Tester(Downstream_Solver):
         return average_loss, test_acc, all_logits
 
 
-def get_mockingjay_optimizer(params, lr, warmup_proportion, training_steps):
+def get_mockingjay_optimizer(params, lr, warmup_proportion, training_steps, eps=1e-6):
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in params if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
@@ -482,5 +483,6 @@ def get_mockingjay_optimizer(params, lr, warmup_proportion, training_steps):
     optimizer = BertAdam(optimizer_grouped_parameters,
                          lr=lr,
                          warmup=warmup_proportion,
-                         t_total=training_steps)
+                         t_total=training_steps,
+                         e=eps)
     return optimizer

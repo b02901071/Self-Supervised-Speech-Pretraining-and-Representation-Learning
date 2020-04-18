@@ -145,7 +145,8 @@ class Solver():
                 self.optimizer = BertAdam(optimizer_grouped_parameters,
                                         lr=self.learning_rate,
                                         warmup=self.warmup_proportion,
-                                        t_total=self.total_steps)
+                                        t_total=self.total_steps,
+                                        e=self.config['optimizer']['eps'])
         else:
             raise NotImplementedError('Invalid Arguments!')
 
