@@ -163,10 +163,10 @@ class MockingjaySelfAttention(nn.Module):
         # Apply the attention mask is (precomputed for all layers in MockingjayModel forward() function)
         attention_scores = attention_scores + attention_mask
         # attention_scores: (batch_size, head_num, seqlen, seqlen)
-        attention_scores = attention_scores + attnspan_mask.unsqueeze(0).unsqueeze(0)
-
+        
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        attention_probs = attention_probs * attnspan_mask.unsqueeze(0).unsqueeze(0)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
@@ -455,12 +455,12 @@ class MockingjayModel(MockingjayInitModel):
             head_mask = [None] * self.config.num_hidden_layers
 
         seqlen = spec_input.size(-2)
-        attnspan_mask = torch.zeros(seqlen, seqlen).to(spec_input.device)
+        attnspan_mask = torch.ones(seqlen, seqlen).to(spec_input.device)
         if self.config.attn_max_span != 'None':
             assert type(self.config.attn_max_span) is int
             upper_indices = torch.triu_indices(seqlen, seqlen, self.config.attn_max_span)
             lower_indices = torch.tril_indices(seqlen, seqlen, -self.config.attn_max_span)
-            attnspan_mask[torch.cat([upper_indices, lower_indices], dim=1).chunk(2)] = -10000.0
+            attnspan_mask[torch.cat([upper_indices, lower_indices], dim=1).chunk(2)] = 0.0
 
         input_representations = self.input_representations(spec_input, pos_enc)
         encoded_layers = self.encoder(input_representations,
