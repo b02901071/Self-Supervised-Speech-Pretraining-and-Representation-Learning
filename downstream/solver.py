@@ -51,6 +51,7 @@ class Downstream_Solver(Solver):
         paras.logdir = paras.logdir.replace('mockingjay', task)
 
         # model
+        self.model_type = config['downstream']['model_type']
         self.load_model_list = config['downstream']['load_model_list']
         self.fine_tune = paras.fine_tune
         self.run_mockingjay = True if 'mockingjay' in task else False
@@ -98,7 +99,6 @@ class Downstream_Solver(Solver):
 
 
     def set_model(self, inference=False):
-        self.model_type = 'linear' if 'phone' in self.task else 'rnn'
         input_dim = int(self.config['downstream'][self.model_type]['input_dim']) if \
                     self.config['downstream'][self.model_type]['input_dim'] != 'None' else None
         if 'mockingjay' in self.task:
