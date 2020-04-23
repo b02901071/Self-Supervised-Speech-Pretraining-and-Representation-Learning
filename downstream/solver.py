@@ -25,7 +25,7 @@ from dataloader import get_Dataloader
 from mockingjay.solver import Solver, Tester
 from mockingjay.optimization import BertAdam
 from downstream.model import LinearClassifier, RnnClassifier
-from utility.audio import mel_dim, fmllr_dim, num_freq, sample_rate, inv_spectrogram
+from utility.audio import mel_dim, fmllr_dim, num_freq, sample_rate, inv_spectrogram, plot_bar
 from runner_apc import get_apc_model
 
 
@@ -338,6 +338,10 @@ class Downstream_Trainer(Downstream_Solver):
                         self.log.add_scalar('acc', acc, self.global_step)
                         self.log.add_scalar('loss', los, self.global_step)
                         self.log.add_scalar('gradient norm', grad_norm, self.global_step)
+                        self.log.add_figure('classifier weights', plot_bar(torch.arange(len(self.classifier.weight)) + 1,
+                                                                           F.softmax(self.classifier.weight.detach().cpu(), dim=-1)),
+                                                                           self.global_step)
+
                         pbar.set_description('Loss %.5f, Acc %.5f' % (los, acc))
 
                         loses = 0.0

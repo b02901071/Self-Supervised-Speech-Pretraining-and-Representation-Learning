@@ -271,3 +271,18 @@ def plot_attention(attn, path):
     plt.imshow(attn)
     plt.savefig(path, format='png')
     plt.close()
+
+
+def plot_boxplot(tensor):
+    assert tensor.dim() == 1
+    fig = plt.figure(figsize=(8, 8))
+    plt.boxplot(tensor)
+    plt.close()
+    return fig
+
+
+def plot_bar(x, y):
+    fig = plt.figure(figsize=(8, 8))
+    plt.bar(x, y)
+    plt.close()
+    return fig
