@@ -83,6 +83,7 @@ def get_mockingjay_args():
     # Options
     parser.add_argument('--with_head', action='store_true', help='inference with the spectrogram head, the model outputs spectrogram.')
     parser.add_argument('--plot_attention', action='store_true', help='plot attention')
+    parser.add_argument('--score_attention', action='store_true', help='score attention')
     parser.add_argument('--load_ws', default='result/result_mockingjay_sentiment/10111754-10170300-weight_sum/best_val.ckpt', help='load weighted-sum weights from trained downstream model')
     parser.add_argument('--cpu', action='store_true', help='Disable GPU training.')
     parser.add_argument('--multi_gpu', action='store_true', help='Enable Multi-GPU training.')
@@ -238,6 +239,13 @@ def main():
         tester.load_data(split='test', load_mel_only=True)
         tester.set_model(inference=True, output_attention=True)
         tester.plot_attention()
+
+    elif args.score_attention:
+        from mockingjay.solver import Tester
+        tester = Tester(config, args)
+        tester.load_data(split='test', load_mel_only=True)
+        tester.set_model(inference=True, output_attention=True)
+        tester.score_attention()
 
 
 ########################

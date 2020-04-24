@@ -666,6 +666,34 @@ class Tester(Solver):
                     plot_attention(layer_attentions.mean(dim=0).detach().cpu(), os.path.join(sample_dir, f'{layerid}-average.png'))
 
 
+    def score_attention(self):
+        attn_dir = os.path.join('attentions', self.exp_name)
+        if not os.path.exists(attn_dir): os.makedirs(attn_dir)
+        with torch.no_grad():
+            head_num = self.config['mockingjay']['num_attention_heads']
+            layer_num = self.config['mockingjay']['num_hidden_layers']
+            center_gravities = torch.zeros(layer_num, head_num)
+            for x in tqdm(self.dataloader):
+                spec_stacked, pos_enc, attn_mask = self.process_MAM_data(spec=x)
+                
+                all_attentions, _ = self.mockingjay(spec_stacked, pos_enc, attention_mask=attn_mask, output_all_encoded_layers=True)
+                all_attentions = torch.stack(all_attentions).transpose(0, 1).cpu().detach()
+                # all_attentions: (batch_size, num_layer, num_head, Q_seq_len, K_seq_len)
+
+                seqlen = all_attentions.size(-1)
+                relative_position = (torch.arange(seqlen).unsqueeze(0) - torch.arange(seqlen).unsqueeze(-1)).abs().view(1, 1, 1, seqlen, seqlen)
+                center_gravity = (all_attentions * relative_position).sum(dim=-1).mean(dim=-1)
+                # center_gravity: (batch_size, num_layer, num_head)
+                center_gravities += center_gravity.mean(dim=0)
+            
+            torch.save(center_gravities, os.path.join(attn_dir, 'attention_scores.pkl'))
+            with open(os.path.join(attn_dir, 'attention_scores.txt'), 'w') as h:
+                cog = center_gravities.view(-1) / self.dataloader.dataset.__len__()
+                values, indices = cog.topk(cog.size(0))
+                for indice, value in zip(indices, values):
+                    h.write(f'{indice} {value}\n')
+
+
     def forward(self, spec, all_layers=True, tile=True, process_from_loader=False):
         """ 
             Generation of the Mockingjay Model Representation
