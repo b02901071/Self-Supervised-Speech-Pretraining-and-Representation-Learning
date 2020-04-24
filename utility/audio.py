@@ -269,6 +269,8 @@ def plot_embedding(spec, path):
 def plot_attention(attn, path):
     fig = plt.figure(figsize=(5, 5))
     plt.imshow(attn)
+    plt.xlabel('Key')
+    plt.ylabel('Query')
     plt.savefig(path, format='png')
     plt.close()
 
