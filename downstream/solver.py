@@ -471,6 +471,24 @@ class Downstream_Tester(Downstream_Solver):
         self.verbose(f'Test result: loss {average_loss}, acc {test_acc}')
 
         return average_loss, test_acc, all_logits
+    
+    def prune_heads_and_test(self, attention_scores):
+        attn_dir = os.path.join('attentions', self.exp_name)
+        if not os.path.exists(attn_dir): os.makedirs(attn_dir)
+        with open(attention_scores, 'r') as h:
+            scores = [line[:-1].split(' ') for line in h.readlines()]
+            scores = [(int(pair[0]), float(pair[1])) for pair in scores]
+        
+        accs = []
+        self.mockingjay.config['mockingjay']['prune_headids'] = []
+        for i, (headid, score) in enumerate(scores):
+            print(f'PRUNE {i + 1} HEADS')
+            self.mockingjay.config['mockingjay']['prune_headids'].append(headid)
+            _, acc, _ = self.exec()
+            accs.append(acc)
+        accs = torch.FloatTensor(accs)
+        print(accs)
+        torch.save(accs, os.path.join(attn_dir, f'{self.task}.prune.acc'))
 
 
 def get_mockingjay_optimizer(params, lr, warmup_proportion, training_steps, eps=1e-6):

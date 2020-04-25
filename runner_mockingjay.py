@@ -84,6 +84,8 @@ def get_mockingjay_args():
     parser.add_argument('--with_head', action='store_true', help='inference with the spectrogram head, the model outputs spectrogram.')
     parser.add_argument('--plot_attention', action='store_true', help='plot attention')
     parser.add_argument('--score_attention', action='store_true', help='score attention')
+    parser.add_argument('--prune_attentions', action='store_true', help='prune attention')
+    parser.add_argument('--attention_scores')
     parser.add_argument('--load_ws', default='result/result_mockingjay_sentiment/10111754-10170300-weight_sum/best_val.ckpt', help='load weighted-sum weights from trained downstream model')
     parser.add_argument('--cpu', action='store_true', help='Disable GPU training.')
     parser.add_argument('--multi_gpu', action='store_true', help='Enable Multi-GPU training.')
@@ -153,7 +155,10 @@ def main():
         tester = Downstream_Tester(config, args, task=task)
         tester.load_data(split='test', load='phone')
         tester.set_model(inference=True)
-        tester.exec()
+        if args.prune_attentions:
+            tester.prune_heads_and_test(args.attention_scores)
+        else:
+            tester.exec()
 
     ##################################################################################
 
@@ -221,7 +226,10 @@ def main():
         tester.load_data(split='test', load='speaker')
         # tester.load_data(split='test', load='speaker_large') # Deprecated
         tester.set_model(inference=True)
-        tester.exec()
+        if args.prune_attentions:
+            tester.prune_heads_and_test(args.attention_scores)
+        else:
+            tester.exec()
 
     ##################################################################################
 
