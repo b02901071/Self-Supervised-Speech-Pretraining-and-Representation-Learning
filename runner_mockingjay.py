@@ -86,6 +86,7 @@ def get_mockingjay_args():
     parser.add_argument('--score_attention', action='store_true', help='score attention')
     parser.add_argument('--prune_attentions', action='store_true', help='prune attention')
     parser.add_argument('--attention_scores')
+    parser.add_argument('--prune_topk', type=int)
     parser.add_argument('--load_ws', default='result/result_mockingjay_sentiment/10111754-10170300-weight_sum/best_val.ckpt', help='load weighted-sum weights from trained downstream model')
     parser.add_argument('--cpu', action='store_true', help='Disable GPU training.')
     parser.add_argument('--multi_gpu', action='store_true', help='Enable Multi-GPU training.')
@@ -145,7 +146,7 @@ def main():
         trainer = Downstream_Trainer(config, args, task=task)
         trainer.load_data(split='train', load='phone')
         trainer.set_model(inference=False)
-        trainer.exec()
+        trainer.exec(args.prune_topk, args.attention_scores)
 
     # Test Phone Task
     elif args.test_phone:
@@ -215,7 +216,7 @@ def main():
         trainer.load_data(split='train', load='speaker')
         # trainer.load_data(split='train', load='speaker_large') # Deprecated
         trainer.set_model(inference=False)
-        trainer.exec()
+        trainer.exec(args.prune_topk, args.attention_scores)
 
     # Test Speaker Task
     elif args.test_speaker:

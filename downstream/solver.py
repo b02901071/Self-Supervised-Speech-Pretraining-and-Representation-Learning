@@ -254,9 +254,15 @@ class Downstream_Trainer(Downstream_Solver):
         self.global_step = 1
 
 
-    def exec(self):
+    def exec(self, topk=None, attention_scores=None):
         ''' Training of downstream tasks'''
         self.verbose('Training set total ' + str(len(self.dataloader)) + ' batches.')
+        self.verbose('Testing set total ' + str(len(self.dataloader)) + ' batches.')
+        if topk is not None and attention_scores is not None:
+            with open(attention_scores, 'r') as h:
+                scores = [line[:-1].split(' ') for line in h.readlines()]
+                scores = [(int(pair[0]), float(pair[1])) for pair in scores]
+            self.mockingjay.config['mockingjay']['prune_headids'] = [headid for headid, score in scores[:topk]]
 
         pbar = tqdm(total=self.total_steps)
         corrects = 0
@@ -365,7 +371,7 @@ class Downstream_Trainer(Downstream_Solver):
                         tester = Downstream_Tester(test_config, test_paras, task=self.task)
                         tester.load_data(split=evaluation, load='cpc_phone' if 'cpc_phone' in self.task else self.task.split('_')[-1])
                         tester.set_model(inference=True)
-                        eval_loss, eval_acc, eval_logits = tester.exec()
+                        eval_loss, eval_acc, eval_logits = tester.exec(topk, attention_scores)
                         self.log.add_scalar(f'{evaluation}_loss', eval_loss, self.global_step)
                         self.log.add_scalar(f'{evaluation}_acc', eval_acc, self.global_step)
                         if eval_acc > best_val_acc:
@@ -401,10 +407,15 @@ class Downstream_Tester(Downstream_Solver):
         self.duo_feature = False # Set duo feature to False since only input mel is needed during testing
         self.load = True # Tester will load pre-trained models automatically
     
-    def exec(self):
+    def exec(self, topk=None, attention_scores=None):
         ''' Testing of downstream tasks'''
         self.verbose('Testing set total ' + str(len(self.dataloader)) + ' batches.')
-        
+        if topk is not None and attention_scores is not None:
+            with open(attention_scores, 'r') as h:
+                scores = [line[:-1].split(' ') for line in h.readlines()]
+                scores = [(int(pair[0]), float(pair[1])) for pair in scores]
+            self.mockingjay.config['mockingjay']['prune_headids'] = [headid for headid, score in scores[:topk]]
+            
         valid_count = 0
         correct_count = 0
         loss_sum = 0
