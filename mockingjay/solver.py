@@ -699,9 +699,6 @@ class Tester(Solver):
                 # entropy: (batch_size, num_layer, num_head, Q_seq_len)
                 entropy = entropy.mean(dim=-1).mean(dim=0)
                 entropies += entropy
-
-                verticality += all_attentions.mean(dim=-2).max(dim=-1).values.mean(dim=0)
-
             
             with open(os.path.join(attn_dir, 'center_gravity.txt'), 'w') as h:
                 cog = center_gravities.view(-1) / self.dataloader.dataset.__len__()
