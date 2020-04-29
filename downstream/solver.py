@@ -490,16 +490,18 @@ class Downstream_Tester(Downstream_Solver):
             scores = [line[:-1].split(' ') for line in h.readlines()]
             scores = [(int(pair[0]), float(pair[1])) for pair in scores]
         
-        accs = []
+        scoring_type = attention_scores.split('.')[0].split('/')[-1]
+        summary = open(os.path.join(attn_dir, f'infer_prune_with_{scoring_type}.txt'), 'w')
+        
         self.mockingjay.config['mockingjay']['prune_headids'] = []
-        for i, (headid, score) in enumerate(scores):
-            print(f'PRUNE {i + 1} HEADS')
-            self.mockingjay.config['mockingjay']['prune_headids'].append(headid)
+        head_num = self.mockingjay.config['mockingjay']['num_attention_heads']
+        for i in range(0, len(scores), head_num):
+            print(f'PRUNE {i + head_num + 1} HEADS: ', end='', file=summary)
+            headids = [item[0] for item in scores[i:i+head_num]]        
+            self.mockingjay.config['mockingjay']['prune_headids'] += headids
             _, acc, _ = self.exec()
-            accs.append(acc)
-        accs = torch.FloatTensor(accs)
-        print(accs)
-        torch.save(accs, os.path.join(attn_dir, f'{self.task}.prune.acc'))
+            print(acc, file=summary)
+        summary.close()
 
 
 def get_mockingjay_optimizer(params, lr, warmup_proportion, training_steps, eps=1e-6):
