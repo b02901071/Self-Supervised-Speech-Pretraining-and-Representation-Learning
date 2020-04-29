@@ -143,3 +143,6 @@ data
 # experiment files
 *.png
 *.pkl
+*.txt
+*.ipynb
+utils/timer.py
