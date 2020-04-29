@@ -273,6 +273,8 @@ def get_mockingjay_model(from_path='result/result_mockingjay/mockingjay_libri_sd
         setattr(paras, 'multi_gpu', False)
     if 'prune_headids' not in config['mockingjay']:
         config['mockingjay']['prune_headids'] = None
+    if 'attn_max_span' not in config['mockingjay']:
+        config['mockingjay']['attn_max_span'] = 'None'
 
     # display checkpoint settings
     if display_settings:
