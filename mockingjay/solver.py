@@ -681,6 +681,7 @@ class Tester(Solver):
             layer_num = self.config['mockingjay']['num_hidden_layers']
             center_gravities = torch.zeros(layer_num, head_num)
             entropies = torch.zeros(layer_num, head_num)
+            verticality = torch.zeros(layer_num, head_num)
             for x in tqdm(self.dataloader):
                 spec_stacked, pos_enc, attn_mask = self.process_MAM_data(spec=x)
                 
@@ -698,6 +699,9 @@ class Tester(Solver):
                 # entropy: (batch_size, num_layer, num_head, Q_seq_len)
                 entropy = entropy.mean(dim=-1).mean(dim=0)
                 entropies += entropy
+
+                verticality += all_attentions.mean(dim=-2).max(dim=-1).values.mean(dim=0)
+
             
             with open(os.path.join(attn_dir, 'center_gravity.txt'), 'w') as h:
                 cog = center_gravities.view(-1) / self.dataloader.dataset.__len__()
@@ -708,6 +712,12 @@ class Tester(Solver):
             with open(os.path.join(attn_dir, 'entropy.txt'), 'w') as h:
                 en = entropies.view(-1) / self.dataloader.dataset.__len__()
                 values, indices = en.topk(en.size(0))
+                for indice, value in zip(indices, values):
+                    h.write(f'{indice} {value}\n')
+
+            with open(os.path.join(attn_dir, 'verticality.txt'), 'w') as h:
+                ver = verticality.view(-1) / self.dataloader.dataset.__len__()
+                values, indices = ver.topk(ver.size(0))
                 for indice, value in zip(indices, values):
                     h.write(f'{indice} {value}\n')
 
