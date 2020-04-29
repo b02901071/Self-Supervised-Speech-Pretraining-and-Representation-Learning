@@ -14,7 +14,6 @@
 # IMPORTATION #
 ###############
 import librosa
-import torch
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -268,7 +267,6 @@ def plot_embedding(spec, path):
 
 
 def plot_attention(attn, path):
-    torch.save(attn, path.replace('.png', '.pth'))
     plt.imshow(attn)
     plt.savefig(path, format='png')
     plt.close()

@@ -649,23 +649,28 @@ class Tester(Solver):
         attn_dir = os.path.join('attentions', self.exp_name)
         if not os.path.exists(attn_dir): os.makedirs(attn_dir)
         with torch.no_grad():
-            sample_index = torch.arange(0, self.dataloader.dataset.__len__(), self.dataloader.dataset.__len__() // 5)
-            for i, idx in enumerate(tqdm(sample_index)):
-                x = self.dataloader.dataset[idx]
-                spec_stacked, pos_enc, attn_mask = self.process_MAM_data(spec=x)
-                
-                all_attentions, _ = self.mockingjay(spec_stacked, pos_enc, attention_mask=attn_mask, output_all_encoded_layers=True)
-                all_attentions = torch.stack(all_attentions).transpose(0, 1)
-                # all_attentions: (batch_size, num_layer, num_head, Q_seq_len, K_seq_len)
+            sample_index = torch.arange(0, self.dataloader.dataset.__len__(), self.dataloader.dataset.__len__() // 5)[-1]
+            x = self.dataloader.dataset[sample_index]
+            spec_stacked, pos_enc, attn_mask = self.process_MAM_data(spec=x)
+            
+            all_attentions, _ = self.mockingjay(spec_stacked, pos_enc, attention_mask=attn_mask, output_all_encoded_layers=True)
+            all_attentions = torch.stack(all_attentions).transpose(0, 1).detach().cpu()
+            # all_attentions: (batch_size, num_layer, num_head, Q_seq_len, K_seq_len)
 
-                sample_dir = os.path.join(attn_dir, str(i))
-                if not os.path.exists(sample_dir): os.makedirs(sample_dir)
-                head_num = self.config['mockingjay']['num_attention_heads']
-                for layerid, layer_attentions in enumerate(all_attentions[0]):
-                    for headid, head_attention in enumerate(layer_attentions):
-                        absoluteid = layerid * head_num + headid
-                        plot_attention(head_attention.detach().cpu(), os.path.join(sample_dir, f'{absoluteid}-{layerid}-{headid}.png'))
-                    plot_attention(layer_attentions.mean(dim=0).detach().cpu(), os.path.join(sample_dir, f'{layerid}-average.png'))
+            png_dir = os.path.join(attn_dir, 'pngs')
+            pth_dir = os.path.join(attn_dir, 'pths')
+            if not os.path.exists(png_dir): os.makedirs(png_dir)
+            if not os.path.exists(pth_dir): os.makedirs(pth_dir)
+            
+            head_num = self.config['mockingjay']['num_attention_heads']
+            for layerid, layer_attentions in enumerate(all_attentions[0]):
+                for headid, head_attention in enumerate(layer_attentions):
+                    head_name = f'{layerid}-{headid}-{layerid * head_num + headid}'
+                    plot_attention(head_attention, os.path.join(png_dir, f'{head_name}.png'))
+                    torch.save(head_attention, os.path.join(pth_dir, f'{head_name}.pth'))
+                avg_attn = layer_attentions.mean(dim=0)
+                plot_attention(avg_attn, os.path.join(png_dir, f'{layerid}-average.png'))
+                torch.save(avg_attn, os.path.join(pth_dir, f'{layerid}-average.pth'))
 
 
     def score_attention(self):
