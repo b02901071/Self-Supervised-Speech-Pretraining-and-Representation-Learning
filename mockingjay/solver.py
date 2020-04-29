@@ -700,7 +700,11 @@ class Tester(Solver):
                 # entropy: (batch_size, num_layer, num_head, Q_seq_len)
                 entropy = entropy.mean(dim=-1).mean(dim=0)
                 entropies += entropy
-            
+
+                ver_distri = all_attentions.mean(dim=-2)
+                ver_entropy = (-ver_distri * (ver_distri + 1e-8).log()).sum(dim=-1).mean(dim=0)
+                verticality += 1 / (ver_entropy + 1e-8)
+
             with open(os.path.join(attn_dir, 'center_gravity.txt'), 'w') as h:
                 cog = center_gravities.view(-1) / self.dataloader.dataset.__len__()
                 values, indices = cog.topk(cog.size(0))
