@@ -459,7 +459,13 @@ class Trainer(Solver):
         self.reset_train()
         
 
-    def test_reconstruct(self):
+    def test_reconstruct(self, topk=None, attention_scores=None):
+        if topk is not None and attention_scores is not None:
+            with open(attention_scores, 'r') as h:
+                scores = [line[:-1].split(' ') for line in h.readlines()]
+                scores = [(int(pair[0]), float(pair[1])) for pair in scores]
+            self.config['mockingjay']['prune_headids'] = [headid for headid, score in scores[:topk]]
+
         head_mask = None
         prune_headids = self.config['mockingjay']['prune_headids']
         if prune_headids is not None:

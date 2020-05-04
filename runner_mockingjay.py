@@ -134,7 +134,7 @@ def main():
         trainer = Trainer(config, args)
         trainer.load_data(split='test')
         trainer.set_model(inference=True, with_head=True)
-        trainer.test_reconstruct()
+        trainer.test_reconstruct(args.prune_topk, args.attention_scores)
 
     ##################################################################################
     
