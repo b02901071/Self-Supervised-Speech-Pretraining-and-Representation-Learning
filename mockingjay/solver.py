@@ -701,7 +701,7 @@ class Tester(Solver):
                 relative_position = (torch.arange(seqlen).unsqueeze(0) - torch.arange(seqlen).unsqueeze(-1)).abs().view(1, 1, 1, seqlen, seqlen)
                 center_gravity = (all_attentions * relative_position).sum(dim=-1).mean(dim=-1)
                 # center_gravity: (batch_size, num_layer, num_head)
-                center_gravities += center_gravity.mean(dim=0)
+                center_gravities -= center_gravity.mean(dim=0)
 
                 entropy = (-all_attentions * (all_attentions + 1e-8).log()).sum(dim=-1)
                 # entropy: (batch_size, num_layer, num_head, Q_seq_len)
@@ -710,7 +710,7 @@ class Tester(Solver):
 
                 ver_distri = all_attentions.mean(dim=-2)
                 ver_entropy = (-ver_distri * (ver_distri + 1e-8).log()).sum(dim=-1).mean(dim=0)
-                verticality += 1 / (ver_entropy + 1e-8)
+                verticality -= ver_entropy
 
                 weight -= all_attentions.max(dim=-1).values.mean(dim=-1).mean(dim=0)
 
