@@ -689,6 +689,7 @@ class Tester(Solver):
             center_gravities = torch.zeros(layer_num, head_num)
             entropies = torch.zeros(layer_num, head_num)
             verticality = torch.zeros(layer_num, head_num)
+            weight = torch.zeros(layer_num, head_num)
             for x in tqdm(self.dataloader):
                 spec_stacked, pos_enc, attn_mask = self.process_MAM_data(spec=x)
                 
@@ -711,6 +712,8 @@ class Tester(Solver):
                 ver_entropy = (-ver_distri * (ver_distri + 1e-8).log()).sum(dim=-1).mean(dim=0)
                 verticality += 1 / (ver_entropy + 1e-8)
 
+                weight -= all_attentions.max(dim=-1).values.mean(dim=-1).mean(dim=0)
+
             with open(os.path.join(attn_dir, 'center_gravity.txt'), 'w') as h:
                 cog = center_gravities.view(-1) / self.dataloader.dataset.__len__()
                 values, indices = cog.topk(cog.size(0))
@@ -726,6 +729,12 @@ class Tester(Solver):
             with open(os.path.join(attn_dir, 'verticality.txt'), 'w') as h:
                 ver = verticality.view(-1) / self.dataloader.dataset.__len__()
                 values, indices = ver.topk(ver.size(0))
+                for indice, value in zip(indices, values):
+                    h.write(f'{indice} {value}\n')
+
+            with open(os.path.join(attn_dir, 'weight.txt'), 'w') as h:
+                w = weight.view(-1) / self.dataloader.dataset.__len__()
+                values, indices = w.topk(w.size(0))
                 for indice, value in zip(indices, values):
                     h.write(f'{indice} {value}\n')
 
