@@ -18,9 +18,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch.utils.data.dataset import Dataset
+from torch.utils.data.dataset import Dataset, ConcatDataset
 from torch.nn.utils.rnn import pad_sequence
 from transformer.mam import process_train_MAM_data, process_test_MAM_data
+from asteroid.data import LibriMix
 
 
 ############
@@ -642,6 +643,7 @@ def get_Dataloader(split, load, data_path, batch_size, max_timestep,
         raise NotImplementedError('Unsupported `split` argument: ' + split)
 
     # Decide which task (or dataset) to propogate through model
+    ## Pretrain
     if load == 'acoustic':
         ds = AcousticDataset(run_mam=run_mam, file_path=data_path, sets=sets, max_timestep=max_timestep,
                              bucket_size=bs, drop=drop_too_long, mam_config=mam_config)
@@ -649,6 +651,7 @@ def get_Dataloader(split, load, data_path, batch_size, max_timestep,
         assert(target_path is not None), '`target path` must be provided for this dataset.'
         ds = Mel_Linear_Dataset(file_path=data_path, target_path=target_path, sets=sets, max_timestep=max_timestep,
                                 bucket_size=bs, drop=drop_too_long, mam_config=mam_config)
+    ## Downstream
     elif load == 'montreal_phone':
         assert(phone_path is not None), '`phone path` must be provided for this dataset.'
         ds = Mel_Phone_Dataset(run_mam=run_mam, file_path=data_path, phone_path=phone_path, sets=sets, max_timestep=max_timestep,
@@ -665,6 +668,15 @@ def get_Dataloader(split, load, data_path, batch_size, max_timestep,
     elif load == 'speaker':
         ds = Speaker_Dataset(split=split, run_mam=run_mam, file_path=data_path, split_path=phone_path, sets=sets, max_timestep=max_timestep,
                              bucket_size=bs, drop=drop_too_long, mam_config=mam_config, seed=seed)
+    ## Tasks
+    elif load == 'separation':
+        all_ds = []
+        for set_i in sets:
+            file_path = os.path.join(data_path, set_i)
+            all_ds.append(LibriMix(csv_dir=file_path, task=kwargs['task'], sample_rate=kwargs['sample_rate'],
+                                   n_src=kwargs['n_src'], segment=kwargs['segment']))
+        ds = ConcatDataset(all_ds)
+        return DataLoader(ds, batch_size=bs, shuffle=shuffle, drop_last=False, num_workers=n_jobs, pin_memory=use_gpu)
     else:
         raise NotImplementedError('Invalid `load` argument for `get_Dataloader()`!')
 
