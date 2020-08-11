@@ -35,6 +35,7 @@ class TransformerConfig(object):
         self.initializer_range = config['transformer']['initializer_range']
         self.layer_norm_eps = float(config['transformer']['layer_norm_eps'])
         self.share_layer = bool(config['transformer']['share_layer']) if 'share_layer' in config['transformer'] else False
+        self.pre_layer_norm = bool(config['transformer']['pre_layer_norm']) if 'pre_layer_norm' in config['transformer'] else False
 
 
 def prune_linear_layer(layer, index, dim=0):
@@ -192,14 +193,17 @@ class TransformerSelfAttention(nn.Module):
 class TransformerSelfOutput(nn.Module):
     def __init__(self, config):
         super(TransformerSelfOutput, self).__init__()
+        self.pre_layer_norm = config.pre_layer_norm
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        hidden_states = hidden_states + input_tensor
+        if not self.pre_layer_norm:
+            hidden_states = self.LayerNorm(hidden_states)
         return hidden_states
 
 
@@ -207,9 +211,12 @@ class TransformerAttention(nn.Module):
     def __init__(self, config, output_attentions=False, keep_multihead_output=False):
         super(TransformerAttention, self).__init__()
         self.output_attentions = output_attentions
+        self.pre_layer_norm = config.pre_layer_norm
         self.self = TransformerSelfAttention(config, output_attentions=output_attentions,
                                               keep_multihead_output=keep_multihead_output)
         self.output = TransformerSelfOutput(config)
+        if self.pre_layer_norm:
+            self.LayerNorm = self.output.LayerNorm
 
     def prune_heads(self, heads):
         if len(heads) == 0:
@@ -229,7 +236,13 @@ class TransformerAttention(nn.Module):
         self.self.all_head_size = self.self.attention_head_size * self.self.num_attention_heads
 
     def forward(self, input_tensor, attention_mask, head_mask=None):
-        self_output = self.self(input_tensor, attention_mask, head_mask)
+        if self.pre_layer_norm:
+            # LayerNorm -> SelfAttention -> SelfOutput (residual)
+            self_output = self.LayerNorm(input_tensor)
+            self_output = self.self(self_output, attention_mask, head_mask)
+        else:
+            # SelfAttention -> SelfOutput (residual + LayerNorm)
+            self_output = self.self(input_tensor, attention_mask, head_mask)
         if self.output_attentions:
             attentions, self_output = self_output
         attention_output = self.output(self_output, input_tensor)
@@ -256,14 +269,17 @@ class TransformerIntermediate(nn.Module):
 class TransformerOutput(nn.Module):
     def __init__(self, config):
         super(TransformerOutput, self).__init__()
+        self.pre_layer_norm = config.pre_layer_norm
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps) # layer_norm for FFN
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        hidden_states = hidden_states + input_tensor
+        if not self.pre_layer_norm:
+            hidden_states = self.LayerNorm(hidden_states)
         return hidden_states
 
 
@@ -271,16 +287,25 @@ class TransformerLayer(nn.Module):
     def __init__(self, config, output_attentions=False, keep_multihead_output=False):
         super(TransformerLayer, self).__init__()
         self.output_attentions = output_attentions
+        self.pre_layer_norm = config.pre_layer_norm
         self.attention = TransformerAttention(config, output_attentions=output_attentions,
                                                keep_multihead_output=keep_multihead_output)
         self.intermediate = TransformerIntermediate(config)
         self.output = TransformerOutput(config)
+        if self.pre_layer_norm:
+            self.LayerNorm = self.output.LayerNorm
 
     def forward(self, hidden_states, attention_mask, head_mask=None):
         attention_output = self.attention(hidden_states, attention_mask, head_mask)
         if self.output_attentions:
             attentions, attention_output = attention_output
-        intermediate_output = self.intermediate(attention_output)
+        if self.pre_layer_norm:
+            # LayerNorm -> Intermediate -> Output (residual)
+            intermediate_output = self.LayerNorm(attention_output)
+            intermediate_output = self.intermediate(intermediate_output)
+        else:
+            # Intermediate -> Output (residual + LayerNorm)
+            intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
         if self.output_attentions:
             return attentions, layer_output
@@ -291,12 +316,18 @@ class TransformerEncoder(nn.Module):
     def __init__(self, config, output_attentions=False, keep_multihead_output=False):
         super(TransformerEncoder, self).__init__()
         self.output_attentions = output_attentions
+        self.pre_layer_norm = config.pre_layer_norm
         layer = TransformerLayer(config, output_attentions=output_attentions,
                                   keep_multihead_output=keep_multihead_output)
         if config.share_layer:
             self.layer = nn.ModuleList([layer for _ in range(config.num_hidden_layers)])
         else:
             self.layer = nn.ModuleList([copy.deepcopy(layer) for _ in range(config.num_hidden_layers)])
+        if self.pre_layer_norm:
+            # If pre-LN Transformer, a final layer_norm would be placed after the last layer,
+            # and intermediate layer_norms for all layer embedding outputs
+            LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+            self.LayerNorm = nn.ModuleList([copy.deepcopy(LayerNorm) for _ in range(config.num_hidden_layers)])
 
     def forward(self, hidden_states, attention_mask, output_all_encoded_layers=True, head_mask=None):
         all_encoder_layers = []
@@ -307,9 +338,15 @@ class TransformerEncoder(nn.Module):
                 attentions, hidden_states = hidden_states
                 all_attentions.append(attentions)
             if output_all_encoded_layers:
-                all_encoder_layers.append(hidden_states)
+                if self.pre_layer_norm:
+                    all_encoder_layers.append(self.LayerNorm[i](hidden_states))
+                else:
+                    all_encoder_layers.append(hidden_states)
         if not output_all_encoded_layers:
-            all_encoder_layers.append(hidden_states)
+            if self.pre_layer_norm:
+                all_encoder_layers.append(self.LayerNorm[-1](hidden_states))
+            else:
+                all_encoder_layers.append(hidden_states)
         if self.output_attentions:
             return all_attentions, all_encoder_layers
         return all_encoder_layers

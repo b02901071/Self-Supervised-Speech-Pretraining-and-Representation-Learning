@@ -175,13 +175,13 @@ def process_train_MAM_data(spec, config=None):
             dice = random.random()
             if dice < noise_proportion:
                 noise_sampler = torch.distributions.Normal(0, 0.2)
-                spec_masked += noise_sampler.sample(spec_masked.shape)
+                spec_masked += noise_sampler.sample(spec_masked.shape).to(device=spec_masked.device)
         
         valid_batchid = mask_label.view(batch_size, -1).sum(dim=-1).nonzero().view(-1)
         batch_is_valid = len(valid_batchid) > 0
         spec_masked = spec_masked.to(dtype=torch.float32)[valid_batchid]
         pos_enc = pos_enc.to(dtype=torch.float32)
-        mask_label = mask_label.to(dtype=torch.uint8)[valid_batchid]
+        mask_label = mask_label.to(dtype=torch.bool)[valid_batchid]
         attn_mask = attn_mask.to(dtype=torch.float32)[valid_batchid]
         spec_stacked = spec_stacked.to(dtype=torch.float32)[valid_batchid]
 

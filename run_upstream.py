@@ -17,7 +17,7 @@ import random
 import argparse
 import numpy as np
 from shutil import copyfile
-from dataloader import get_Dataloader
+from dataloader import get_Dataloader, get_online_Dataloader
 from utility.helper import parse_prune_heads
 
 
@@ -53,12 +53,16 @@ def get_upstream_args():
     parser.add_argument('--cpu', action='store_true', help='Disable GPU training.')
     parser.add_argument('--multi_gpu', action='store_true', help='Enable Multi-GPU training.')
     parser.add_argument('--test_reconstruct', action='store_true', help='Test reconstruction capability')
+    parser.add_argument('--online_config', help='Explicitly specify the config of on-the-fly feature extraction')
 
     # parse
     args = parser.parse_args()
     setattr(args, 'gpu', not args.cpu)
     config = yaml.load(open(args.config, 'r'), Loader=yaml.FullLoader)
     parse_prune_heads(config)
+    if args.online_config is not None:
+        online_config = yaml.load(open(args.online_config, 'r'), Loader=yaml.FullLoader)
+        config['online'] = online_config
     
     return args, config
 
@@ -97,9 +101,14 @@ def run_transformer(args, config):
     if not os.path.exists(ckpdir):
         os.makedirs(ckpdir)
     copyfile(args.config, os.path.join(ckpdir, args.config.split('/')[-1]))
+    if args.online_config is not None:
+        copyfile(args.online_config, os.path.join(ckpdir, args.online_config.split('/')[-1]))
 
     # get dataloader
-    dataloader = get_dataloader(args, config)
+    if 'online' in config:
+        dataloader = get_online_Dataloader(args, config, is_train=True)
+    else:
+        dataloader = get_dataloader(args, config)
 
     # train
     runner = Runner(args, config, dataloader, ckpdir)

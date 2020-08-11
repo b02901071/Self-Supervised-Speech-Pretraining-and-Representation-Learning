@@ -37,6 +37,7 @@ Table of Contents
        * [Evaluating ASR with PyTorch-Kaldi scripts](#evaluating-asr-with-pytorch-kaldi-scripts)
    * [Evaluating your own model](#evaluating-your-own-model)
    * [Using upstream models with your own task](#using-upstream-models-with-your-own-task)
+   * [Tutorial for application on custom dataset](#tutorial-for-application-on-custom-dataset)
    * [Supplementary Wiki Page](#supplementary-wiki-page)
        * [Extracting with Kaldi](#extracting-with-kaldi)
        * [ASR with PyTorch Kaldi](#asr-with-pytorch-kaldi)
@@ -56,11 +57,11 @@ This is an open source project called S3PRL, which stands for **S**elf-**S**uper
     - Described in ["Mockingjay: Unsupervised Speech Representation Learning with Deep Bidirectional Transformer Encoders"](https://arxiv.org/abs/1910.12638)
     - *Transformer based, BERT-style masked reconstruction loss*
     - These papers used our implementations: [Adversarial Defense](https://arxiv.org/abs/2006.03214), [Understanding Self-attention](https://arxiv.org/abs/2006.03265)
-    - Oral Lecture in [ICASSP 2020](https://2020.ieeeicassp.org/).
+    - Accepted by [ICASSP 2020](https://2020.ieeeicassp.org/) as an oral lecture.
 - **TERA**
-    - Described in ["TERA: Self-Supervised Pre-training of Transformer Encoders for Speech"]()
+    - Described in ["TERA: Self-Supervised Learning of Transformer Encoder Representation for Speech"](https://arxiv.org/abs/2007.06028)
     - *Transformer based, multi-target alteration reconstruction loss*
-    - Paper are coming soon.
+    - Submitted to [IEEE/ACM TASLP](https://ieeexplore.ieee.org/xpl/RecentIssue.jsp?punumber=6570655).
 - **Audio ALBERT**
     - Described in ["Audio ALBERT: A Lite BERT for Self-supervised Learning of Audio Representation"](https://arxiv.org/abs/2005.08575)
     - *Transformer based, BERT-style masked reconstruction loss*
@@ -68,8 +69,8 @@ This is an open source project called S3PRL, which stands for **S**elf-**S**uper
 - **APC**
     - Described in ["An Unsupervised Autoregressive Model for Speech Representation Learning"](https://arxiv.org/abs/1904.03240)
     - *RNN based, unidirectional reconstruction loss*
-    - Accepted by [INTERSPEECH 2019](https://interspeech2019.org/).
-    - 
+    - Accepted by [INTERSPEECH 2019](https://interspeech2019.org/) as an oral session.
+
 ------------------------------------
 
 ### Downstream Tasks
@@ -150,7 +151,7 @@ Pillow           # visualization
 ```
 The above packages can be installed by the command: `pip install -r requirements.txt`
 
-- Here we list optional packages that need special attention, and we recommand you to install them manually:
+- Here we list optional packages that need special attention, and we recommend you to install them manually:
 ```
 ipdb             # debugger (Optional)
 apex             # faster optimization (Optional and non-essential, only needed if enabled in config)
@@ -175,7 +176,7 @@ For the installation and usage of Kaldi and PyTorch-Kaldi, see our supplementary
 - Open the file `~/.bashrc` in your text editor – e.g. `subl ~/.bashrc`;
 - Add the following line to the end:
 ```bash
-export PYTHONPATH=/your_abs_path/Self-Supervised-Speech-Pretraining-and-Representation-Learning
+export PYTHONPATH="/your_abs_path/Self-Supervised-Speech-Pretraining-and-Representation-Learning:$PYTHONPATH"
 ```
 *Make sure you change it to your own path.*
 - Restart your terminal application to read in the new settings, and type this to check if everything is working: `echo $PYTHONPATH`
@@ -183,7 +184,7 @@ export PYTHONPATH=/your_abs_path/Self-Supervised-Speech-Pretraining-and-Represen
 ```python
 from transformer.nn_transformer import TRANSFORMER
 ```
-- Read the [documentations](https://bic-berkeley.github.io/psych-214-fall-2016/using_pythonpath.html) if you run in to any problem.
+- Read the [documentation](https://bic-berkeley.github.io/psych-214-fall-2016/using_pythonpath.html) if you run into any problem.
 
 #### Windows
 - For Windows, add the following lines to your .py code:
@@ -198,7 +199,7 @@ if S3PRL_PATH not in sys.path:
 [Back to Top](#table-of-contents)
 
 ------------------------------------
-Data preporation
+Data preparation
 ------------------------------------
 ### Download extracted features
 - We provide the features we extracted for you to download directly: [S3PRL Drive](http://www.bit.ly/drive-S3PRL)
@@ -272,7 +273,7 @@ unzip converted_aligned_phones.zip
 ```yaml
 phone_path: 'data/cpc_phone'
 ```
-- ***Warning:** these phone alignments correspond to a feature/label for every 10ms, you need to use features with windows of 25 ms and an overlap of 10 ms, we recommand the [Kaldi extracted features](http://www.bit.ly/drive-S3PRL).*
+- ***Warning:** these phone alignments correspond to a feature/label for every 10ms, you need to use features with windows of 25 ms and an overlap of 10 ms, we recommend the [Kaldi extracted features](http://www.bit.ly/drive-S3PRL).*
 
 #### Montreal Phone Set
 - 72 phone classes, this set is considered in the Mockingjay paper.
@@ -296,7 +297,7 @@ phone_path: 'data/libri_phone'
 Train upstream models
 ------------------------------------
 - For the pre-training of each model, we provide default configs files `*.yaml` under the [`config/`](config/) directory. However, you may change them according to your needs.
-- *Warning*: the parameters may not strickly follow the original papers, please verify carefully if you need them to be identical.
+- *Warning*: the parameters may not strictly follow the original papers, please verify carefully if you need them to be identical.
 - The argument `--name` is used for distinction only, you can use whatever name you want.
 
 ### Train your own Mockingjay
@@ -420,8 +421,8 @@ Using upstream models with your own task
     - *AALBERT Models:* 
     Coming soon, download the data of `libri_fbank_cmvn.zip`, or follow the pipeline used in the *Kaldi s5 recipe* to extract identical ***80-dim fbank*** features.
 - ***WARNING:** 
-  If you are getting bad or worse results, its probably caused by the **mismatch of acoustic features** between pre-trained models and downstream task!!!* 
-- Below we show an [example code](src/example_extract_finetune.py) of fine-tuning a upstream model with your own downstream model, by using the wrapper class in [nn_transformer.py](transformer/nn_transformer.py):
+  If you are getting bad or worse results, it's probably caused by the **mismatch of acoustic features** between pre-trained models and downstream task!!!* 
+- Below we show an [example code](src/example_extract_finetune.py) of fine-tuning an upstream model with your own downstream model, by using the wrapper class in [nn_transformer.py](transformer/nn_transformer.py):
 ```python
 import torch
 from transformer.nn_transformer import TRANSFORMER
@@ -468,10 +469,46 @@ states = {'Classifier': classifier.state_dict(), 'Transformer': transformer.stat
 
 [Back to Top](#table-of-contents)
 
+Tutorial for application on custom dataset
+------------------------------------
+For any arbitrary dataset that looks like this:
+```
+- Custom_dataset/
+    - Custom_train/
+       - *.wav / flac / mp3 ...
+    - Custom_dev/
+       - *.wav / flac / mp3 ...
+    - Custom_test/
+       - *.wav / flac / mp3 ...
+```
+The script `preprocess/preprocess_any.py` will process the "train", "dev", "test" set one by one:
+```bash
+python preprocess/preprocess_any.py --audio_extention=.flac
+```
+
+Users only need to specify the path of the directory of each set.
+So for the example above: 
+- the path to the "train" set should be: `Custom_dataset/Custom_train/`
+- the path to the "dev" set should be: `Custom_dataset/Custom_dev/`
+- the path to the "test" set should be: `Custom_dataset/Custom_test/`
+
+The generated files will be compatible to our dataloader.
+
+
+Also, in your config file `*.yaml`, these should be changed:
+```yaml
+  data_path: 'data/NewData_fbank80' 
+  train_set: ['train']
+  dev_set: ['dev'] 
+  test_set: ['test']
+```
+
+[Back to Top](#table-of-contents)
+
 Supplementary Wiki Page
 ------------------------------------
-### [Extracting with Kaldi](https://github.com/andi611/Self-Supervised-Speech-Pretraining-and-Representation-Learning/wiki/Extracting-with-Kaldi)
-### [ASR with PyTorch Kaldi](https://github.com/andi611/Self-Supervised-Speech-Pretraining-and-Representation-Learning/wiki/ASR-with-PyTorch-Kaldi)
+- [Extracting with Kaldi](https://github.com/andi611/Self-Supervised-Speech-Pretraining-and-Representation-Learning/wiki/Extracting-with-Kaldi)
+- [ASR with PyTorch Kaldi](https://github.com/andi611/Self-Supervised-Speech-Pretraining-and-Representation-Learning/wiki/ASR-with-PyTorch-Kaldi)
 
 [Back to Top](#table-of-contents)
 
@@ -500,7 +537,19 @@ Reference
 
 Citation
 ------------------------------------
-Here we list all papers that use our toolkit.
+- The S3PRL Toolkit:
+```
+@misc{S3PRL,
+  author = {Andy T. Liu and Yang Shu-wen},
+  title = {{S3PRL}: The Self-Supervised Speech Pre-training and Representation Learning Toolkit},
+  year = {2020},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  url = {https://github.com/andi611/Self-Supervised-Speech-Pretraining-and-Representation-Learning}
+}
+```
+
+Here we also list all papers that use our toolkit (Feel free to add your own paper by making a pull request).
 - Mockingjay:
 ```
 @article{mockingjay,
@@ -517,7 +566,13 @@ Here we list all papers that use our toolkit.
 ```
 - TERA:
 ```
-@article{coming2020soon
+@misc{tera,
+    title={TERA: Self-Supervised Learning of Transformer Encoder Representation for Speech},
+    author={Andy T. Liu and Shang-Wen Li and Hung-yi Lee},
+    year={2020},
+    eprint={2007.06028},
+    archivePrefix={arXiv},
+    primaryClass={eess.AS}
 }
 ```
 - Mockingjay for Adversarial Defense

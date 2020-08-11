@@ -21,6 +21,8 @@ from transformer.model import TransformerConfig, TransformerForMaskedAcousticMod
 from transformer.optimization import BertAdam, WarmupLinearSchedule
 from transformer.mam import fast_position_encoding
 from utility.audio import plot_spectrogram_to_numpy
+from transformer.mam import process_train_MAM_data
+from utility.preprocessor import OnlinePreprocessor
 
 
 ##########
@@ -57,8 +59,15 @@ class Runner():
 
         # model
         self.transformer_config = config['transformer']
-        self.input_dim = self.transformer_config['input_dim']
-        self.output_dim = 1025 if self.duo_feature else None # output dim is the same as input dim if not using duo features
+        if 'online' in config:
+            print(f'[Runner] - Using features extracted on-the-fly')
+            feat_list = [config['online']['input'], config['online']['target']]
+            self.preprocessor = OnlinePreprocessor(**config['online'], feat_list=feat_list).to(device=self.device)
+            self.input_dim, self.output_dim = [feat.size(-1) for feat in self.preprocessor()]
+        else:
+            print(f'[Runner] - Using features pre-extracted and saved')
+            self.input_dim = self.transformer_config['input_dim']
+            self.output_dim = 1025 if self.duo_feature else None # output dim is the same as input dim if not using duo features
 
 
     def set_model(self):
@@ -67,8 +76,7 @@ class Runner():
         # build the Transformer model with speech prediction head
         model_config = TransformerConfig(self.config)
         self.dr = model_config.downsample_rate
-        self.hidden_size = model_config.hidden_size
-        
+
         self.model = TransformerForMaskedAcousticModel(model_config, self.input_dim, self.output_dim).to(self.device)
         self.model.train()
 
@@ -168,13 +176,13 @@ class Runner():
             if pos_enc.dim() == 3:
                 # pos_enc: (batch_size, seq_len, hidden_size)
                 # GPU memory need (batch_size * seq_len * hidden_size)
-                pos_enc = torch.FloatTensor(pos_enc).to(device=self.device)
+                pos_enc = pos_enc.float().to(device=self.device)
             elif pos_enc.dim() == 2:
                 # pos_enc: (seq_len, hidden_size)
                 # GPU memory only need (seq_len * hidden_size) even after expanded
-                pos_enc = torch.FloatTensor(pos_enc).to(device=self.device).expand(spec_masked.size(0), *pos_enc.size())
-            mask_label = torch.ByteTensor(mask_label).to(device=self.device)
-            attn_mask = torch.FloatTensor(attn_mask).to(device=self.device)
+                pos_enc = pos_enc.float().to(device=self.device).expand(spec_masked.size(0), *pos_enc.size())
+            mask_label = mask_label.bool().to(device=self.device)
+            attn_mask = attn_mask.float().to(device=self.device)
             spec_stacked = spec_stacked.to(device=self.device)
 
         return spec_masked, pos_enc, mask_label, attn_mask, spec_stacked # (x, pos_enc, mask_label, attention_mask. y)
@@ -190,7 +198,14 @@ class Runner():
 
             step = 0
             loss_val = 0
-            for batch_is_valid, *batch in progress:
+            for batch in progress:
+                if 'online' in self.config:
+                    # batch are raw waveforms
+                    # batch: (batch_size, channel, max_len)
+                    specs = self.preprocessor(batch.to(device=self.device))
+                    batch = process_train_MAM_data(specs, config=self.transformer_config)
+                    
+                batch_is_valid, *batch = batch
                 try:
                     if self.global_step > self.total_steps: break
                     if not batch_is_valid: continue
