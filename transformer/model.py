@@ -37,6 +37,7 @@ class TransformerConfig(object):
         self.share_layer = bool(config['transformer']['share_layer']) if 'share_layer' in config['transformer'] else False
         self.pre_layer_norm = bool(config['transformer']['pre_layer_norm']) if 'pre_layer_norm' in config['transformer'] else False
         self.pos_enc = config['transformer']['pos_enc'] if 'pos_enc' in config['transformer'] else 'Sinusoidal'
+        self.downsample_type = config['transformer']['downsample_type'] if 'downsample_type' in config['transformer'] else 'simple'
 
 
 def prune_linear_layer(layer, index, dim=0):
