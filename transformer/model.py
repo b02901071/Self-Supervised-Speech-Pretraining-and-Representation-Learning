@@ -113,12 +113,11 @@ class TransformerInputRepresentations(nn.Module):
         self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.conv_pos = True if config.pos_enc == 'Conv' else False
-        if config.pos_enc == 'Conv':
-            self.pos_conv = nn.Conv1d(config.hidden_size,
-                                      config.hidden_size,
-                                      kernel_size=129,
-                                      padding=64,
-                                      groups=16)
+        self.pos_conv = nn.Conv1d(config.hidden_size,
+                                  config.hidden_size,
+                                  kernel_size=129,
+                                  padding=64,
+                                  groups=16)
 
     def forward(self, spec, pos_enc):
         spec_transformed = self.spec_transform(spec)
