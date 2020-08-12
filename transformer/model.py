@@ -36,6 +36,7 @@ class TransformerConfig(object):
         self.layer_norm_eps = float(config['transformer']['layer_norm_eps'])
         self.share_layer = bool(config['transformer']['share_layer']) if 'share_layer' in config['transformer'] else False
         self.pre_layer_norm = bool(config['transformer']['pre_layer_norm']) if 'pre_layer_norm' in config['transformer'] else False
+        self.pos_enc = config['transformer']['pos_enc'] if 'pos_enc' in config['transformer'] else 'Sinusoidal'
 
 
 def prune_linear_layer(layer, index, dim=0):
@@ -111,11 +112,21 @@ class TransformerInputRepresentations(nn.Module):
         # any TensorFlow checkpoint file
         self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.conv_pos = True if config.pos_enc == 'Conv' else False
+        if config.pos_enc == 'Conv':
+            self.pos_conv = nn.Conv1d(config.hidden_size,
+                                      config.hidden_size,
+                                      kernel_size=129,
+                                      padding=64,
+                                      groups=16)
 
     def forward(self, spec, pos_enc):
         spec_transformed = self.spec_transform(spec)
 
-        input_representations = spec_transformed + pos_enc
+        if self.conv_pos:
+            input_representations = self.pos_conv(spec_transformed.transpose(1,2)).transpose(1,2)
+        else:
+            input_representations = spec_transformed + pos_enc
         input_representations = self.LayerNorm(input_representations)
         input_representations = self.dropout(input_representations)
         return input_representations
