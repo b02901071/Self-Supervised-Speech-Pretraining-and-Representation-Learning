@@ -1,4 +1,5 @@
 model:                                                  # downstream model config
+  tasnet: 'ConvTasnet'  # 'ConvTasnet' or 'Transformer'
   transformer:
     input_dim: &input_dim 512                                         # `int`, 39 for mfcc, 40 for fmllr, 80 for fbank, 160 for mel
     downsample_rate: 4                                    # stacked consecutive features vectors to reduce the length of input sequences by this factor.

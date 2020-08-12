@@ -68,8 +68,10 @@ class Runner():
         self.dr = model_config.downsample_rate
         self.hidden_size = model_config.hidden_size
         
-        self.model = ConvTasnet(model_config, self.input_dim, self.output_dim).to(self.device)
-        # self.model = TransformerForTasnet(model_config, self.input_dim, self.output_dim).to(self.device)
+        if self.config['model']['tasnet'] == 'ConvTasnet':
+            self.model = ConvTasnet(model_config, self.input_dim, self.output_dim).to(self.device)
+        elif self.config['model']['tasnet'] == 'Transformer':
+            self.model = TransformerForTasnet(model_config, self.input_dim, self.output_dim).to(self.device)
         self.model.train()
 
         if self.args.multi_gpu:
@@ -112,9 +114,6 @@ class Runner():
 
     def save_model(self, name='states', to_path=None):
         all_states = {
-            # 'MaskerHead': self.model.MaskerHead.state_dict() if not self.args.multi_gpu else self.model.module.MaskerHead.state_dict(),
-            # 'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
-            'masker': self.model.masker.state_dict() if not self.args.multi_gpu else self.model.module.masker.state_dict(),
             'encoder': self.model.encoder.state_dict() if not self.args.multi_gpu else self.model.module.encoder.state_dict(),
             'decoder': self.model.decoder.state_dict() if not self.args.multi_gpu else self.model.module.decoder.state_dict(),
             'Optimizer': self.optimizer.state_dict(),
@@ -124,6 +123,15 @@ class Runner():
                 'Paras': self.args,
             },
         }
+        if self.config['model']['tasnet'] == 'ConvTasnet':
+            all_states.update({
+                'masker': self.model.masker.state_dict() if not self.args.multi_gpu else self.model.module.masker.state_dict(),
+            })
+        elif self.config['model']['tasnet'] == 'Transformer':
+            all_states.update({
+                'MaskerHead': self.model.MaskerHead.state_dict() if not self.args.multi_gpu else self.model.module.MaskerHead.state_dict(),
+                'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
+            })
 
         if to_path is None:
             new_model_path = '{}/{}-{}.ckpt'.format(self.ckpdir, name, self.global_step)
@@ -136,23 +144,6 @@ class Runner():
         if len(self.model_kept) >= self.max_keep:
             os.remove(self.model_kept[0])
             self.model_kept.pop(0)
-
-
-    def up_sample_frames(self, spec, return_first=False):
-        if len(spec.shape) != 3: 
-            spec = spec.unsqueeze(0)
-            assert(len(spec.shape) == 3), 'Input should have acoustic feature of shape BxTxD'
-        # spec shape: [batch_size, sequence_length // downsample_rate, output_dim * downsample_rate]
-        spec_flatten = spec.view(spec.shape[0], spec.shape[1]*self.dr, spec.shape[2]//self.dr)
-        if return_first: return spec_flatten[0]
-        return spec_flatten # spec_flatten shape: [batch_size, sequence_length * downsample_rate, output_dim // downsample_rate]
-
-
-    def down_sample_frames(self, spec):
-        left_over = spec.shape[1] % self.dr
-        if left_over != 0: spec = spec[:, :-left_over, :]
-        spec_stacked = spec.view(spec.shape[0], spec.shape[1]//self.dr, spec.shape[2]*self.dr)
-        return spec_stacked
 
 
     def process_data(self, spec):
@@ -243,15 +234,6 @@ class Runner():
 
                         if self.global_step % self.save_step == 0:
                             self.save_model('states')
-                            # mask_spec = self.up_sample_frames(spec_masked[0], return_first=True)
-                            # pred_spec = self.up_sample_frames(pred_spec[0], return_first=True)
-                            # true_spec = self.up_sample_frames(spec_stacked[0], return_first=True)
-                            # mask_spec = plot_spectrogram_to_numpy(mask_spec.data.cpu().numpy())
-                            # pred_spec = plot_spectrogram_to_numpy(pred_spec.data.cpu().numpy())
-                            # true_spec = plot_spectrogram_to_numpy(true_spec.data.cpu().numpy())
-                            # self.log.add_image('mask_spec', mask_spec, self.global_step)
-                            # self.log.add_image('pred_spec', pred_spec, self.global_step)
-                            # self.log.add_image('true_spec', true_spec, self.global_step)
 
                         loss_val = 0
                         pbar.update(1)

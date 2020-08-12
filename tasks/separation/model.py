@@ -40,12 +40,6 @@ class ModelConfig(TransformerConfig, SeparationConfig):
 class ConvTasnet(TransformerInitModel):
     def __init__(self, config, input_dim, output_dim, output_attentions=False, keep_multihead_output=False):
         super().__init__(config, output_attentions)
-        # self.Transformer = TransformerModel(config, input_dim, output_attentions=output_attentions,
-                                            # keep_multihead_output=keep_multihead_output)
-        # spec_dim = output_dim if output_dim is not None else input_dim
-        # self.MaskerHead = TransformerSpecPredictionHead(config, spec_dim * self.config.n_src)
-        # self.apply(self.init_Transformer_weights)
-
         self.encoder, self.decoder = fb.make_enc_dec(self.config.fb_name,
                                                      n_filters=self.config.n_filters,
                                                      kernel_size=self.config.kernel_size,
@@ -57,40 +51,6 @@ class ConvTasnet(TransformerInitModel):
                                 n_src=self.config.n_src)
 
         self.criterion = PITLossWrapper(pairwise_neg_sisdr, pit_from='pw_mtx')
-
-    def up_sample_frames(self, spec, return_first=False):
-        dr = self.config.downsample_rate
-        if len(spec.shape) != 4: 
-            spec = spec.unsqueeze(0)
-            assert(len(spec.shape) == 4), 'Input should have acoustic feature of shape BxCxTxD'
-        # spec shape: [batch_size, n_src, sequence_length // downsample_rate, output_dim * downsample_rate]
-        spec_flatten = spec.view(spec.shape[0], spec.shape[1], spec.shape[2]*dr, spec.shape[3]//dr)
-        if return_first: return spec_flatten[0]
-        return spec_flatten # spec_flatten shape: [batch_size, n_src, sequence_length * downsample_rate, output_dim // downsample_rate]
-
-    def down_sample_frames(self, spec):
-        dr = self.config.downsample_rate
-        left_over = spec.shape[1] % dr
-        if left_over != 0: spec = spec[:, :-left_over, :]
-        spec_stacked = spec.view(spec.shape[0], spec.shape[1]//dr, spec.shape[2]*dr)
-        return spec_stacked
-
-    def process_data(self, spec):
-        hidden_size = self.config.hidden_size
-
-        spec_stacked = self.down_sample_frames(spec)
-
-        spec_len = (spec_stacked.sum(dim=-1) != 0).long().sum(dim=-1).tolist()
-        batch_size = spec_stacked.shape[0]
-        seq_len = spec_stacked.shape[1]
-        
-        pos_enc = fast_position_encoding(seq_len, hidden_size).to(dtype=spec_stacked.dtype, device=spec_stacked.device)
-        attn_mask = spec.new_ones((batch_size, seq_len))
-        
-        for idx in range(len(spec_stacked)):
-            attn_mask[idx, spec_len[idx]:] = 0
-
-        return spec_stacked, pos_enc, attn_mask
 
     def forward(self, x, head_mask=None, labels=None):
         if len(x.shape) == 2:   # [batch, n_frames]
