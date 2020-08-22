@@ -85,8 +85,27 @@ class TransformerForTasnet(TransformerInitModel):
                                                      who_is_pinv='dec')
 
         self.criterion = PITLossWrapper(pairwise_neg_sisdr, pit_from='pw_mtx')
+        if self.config.downsample_type == 'Conv':
+            self.down_conv = nn.Conv1d(self.config.n_filters,
+                                       self.config.n_filters * self.config.downsample_rate,
+                                       kernel_size=129,
+                                       padding=64,
+                                       groups=16,
+                                       stride=self.config.downsample_rate)
+            self.up_deconv = nn.ConvTranspose1d(self.config.n_filters * self.config.downsample_rate,
+                                                self.config.n_filters,
+                                                kernel_size=129,
+                                                padding=64,
+                                                groups=16,
+                                                stride=self.config.downsample_rate)
 
     def up_sample_frames(self, spec, return_first=False):
+        if self.config.downsample_type == 'Conv':
+            batch_size, n_src, n_frames, n_filters = spec.shape
+            spec = spec.reshape(batch_size*n_src, n_frames, n_filters)
+            spec = self.up_deconv(spec.transpose(1, 2)).transpose(1, 2).contiguous()
+            return spec.reshape(batch_size, n_src, spec.shape[1], spec.shape[2])
+
         dr = self.config.downsample_rate
         if len(spec.shape) != 4: 
             spec = spec.unsqueeze(0)
@@ -97,6 +116,8 @@ class TransformerForTasnet(TransformerInitModel):
         return spec_flatten # spec_flatten shape: [batch_size, n_src, sequence_length * downsample_rate, output_dim // downsample_rate]
 
     def down_sample_frames(self, spec):
+        if self.config.downsample_type == 'Conv':
+            return self.down_conv(spec.transpose(1, 2)).transpose(1, 2).contiguous()
         dr = self.config.downsample_rate
         left_over = spec.shape[1] % dr
         if left_over != 0: spec = spec[:, :-left_over, :]
@@ -114,7 +135,7 @@ class TransformerForTasnet(TransformerInitModel):
         
         pos_enc = fast_position_encoding(seq_len, hidden_size).to(dtype=spec_stacked.dtype, device=spec_stacked.device)
         attn_mask = spec.new_ones((batch_size, seq_len))
-        
+
         for idx in range(len(spec_stacked)):
             attn_mask[idx, spec_len[idx]:] = 0
 

@@ -37,6 +37,7 @@ class TransformerConfig(object):
         self.share_layer = bool(config['transformer']['share_layer']) if 'share_layer' in config['transformer'] else False
         self.pre_layer_norm = bool(config['transformer']['pre_layer_norm']) if 'pre_layer_norm' in config['transformer'] else False
         self.pos_enc = config['transformer']['pos_enc'] if 'pos_enc' in config['transformer'] else 'Sinusoidal'
+        self.downsample_type = config['transformer']['downsample_type'] if 'downsample_type' in config['transformer'] else 'simple'
 
 
 def prune_linear_layer(layer, index, dim=0):
@@ -113,12 +114,11 @@ class TransformerInputRepresentations(nn.Module):
         self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.conv_pos = True if config.pos_enc == 'Conv' else False
-        if config.pos_enc == 'Conv':
-            self.pos_conv = nn.Conv1d(config.hidden_size,
-                                      config.hidden_size,
-                                      kernel_size=129,
-                                      padding=64,
-                                      groups=16)
+        self.pos_conv = nn.Conv1d(config.hidden_size,
+                                  config.hidden_size,
+                                  kernel_size=129,
+                                  padding=64,
+                                  groups=16)
 
     def forward(self, spec, pos_enc):
         spec_transformed = self.spec_transform(spec)

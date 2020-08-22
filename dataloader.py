@@ -746,13 +746,22 @@ def get_Dataloader(split, load, data_path, batch_size, max_timestep,
                              bucket_size=bs, drop=drop_too_long, mam_config=mam_config, seed=seed)
     ## Tasks
     elif load == 'separation':
+        # create dataloader for extracting features
+        def collate_fn(samples):
+            # samples: [((seq_len), (n_src, seq_len), ...]
+            mixture, sources = zip(*samples)
+            mixture = pad_sequence(mixture, batch_first=True)
+            sources = pad_sequence(sources, batch_first=True)
+            # samples: (batch_size, max_len, channel)
+            return mixture, sources
+            # return: (batch_size, channel, max_len)
         all_ds = []
         for set_i in sets:
             file_path = os.path.join(data_path, set_i)
             all_ds.append(LibriMix(csv_dir=file_path, task=kwargs['task'], sample_rate=kwargs['sample_rate'],
                                    n_src=kwargs['n_src'], segment=kwargs['segment']))
         ds = ConcatDataset(all_ds)
-        return DataLoader(ds, batch_size=bs, shuffle=shuffle, drop_last=False, num_workers=n_jobs, pin_memory=use_gpu)
+        return DataLoader(ds, batch_size=bs, shuffle=shuffle, drop_last=False, num_workers=n_jobs, pin_memory=use_gpu, collate_fn=collate_fn)
     else:
         raise NotImplementedError('Invalid `load` argument for `get_Dataloader()`!')
 
