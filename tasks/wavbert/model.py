@@ -30,6 +30,7 @@ class WavBertConfig(object):
         self.segment = config['separation']['segment']
         self.n_src = config['separation']['n_src']
         self.fb_name = config['separation']['fb_name']
+        self.p_inv = config['separation']['p_inv'] if 'p_inv' in config['separation'] else 'dec'
 
         self.mask_proportion = config['transformer']['mask_proportion']
         self.mask_consecutive_min = config['transformer']['mask_consecutive_min'] * self.sample_rate
@@ -50,12 +51,12 @@ class ModelConfig(TransformerConfig, WavBertConfig):
 ##########################
 # Transformer ConvTasnet #
 ##########################
-class TransformerForTasnet(TransformerInitModel):
+class TransformerForWavBert(TransformerInitModel):
     def __init__(self, config, input_dim, output_dim, output_attentions=False, keep_multihead_output=False):
         super().__init__(config, output_attentions)
         self.Transformer = TransformerModel(config, input_dim, output_attentions=output_attentions,
                                             keep_multihead_output=keep_multihead_output)
-        # spec_dim = output_dim if output_dim is not None else input_dim
+        spec_dim = output_dim if output_dim is not None else input_dim
         self.SpecHead = TransformerSpecPredictionHead(config, spec_dim)
         self.apply(self.init_Transformer_weights)
 
@@ -64,22 +65,40 @@ class TransformerForTasnet(TransformerInitModel):
                                                      kernel_size=self.config.kernel_size,
                                                      stride=self.config.stride,
                                                      sample_rate=self.config.sample_rate,
-                                                     who_is_pinv='dec')
+                                                     who_is_pinv=self.config.p_inv)
 
         self.criterion = nn.L1Loss()
         # self.criterion = PITLossWrapper(pairwise_neg_sisdr, pit_from='pw_mtx')
+        if self.config.downsample_type == 'Conv':
+            self.down_conv = nn.Conv1d(self.config.n_filters,
+                                       self.config.n_filters * self.config.downsample_rate,
+                                       kernel_size=129,
+                                       padding=64,
+                                       groups=16,
+                                       stride=self.config.downsample_rate)
+            self.up_deconv = nn.ConvTranspose1d(self.config.n_filters * self.config.downsample_rate,
+                                                self.config.n_filters,
+                                                kernel_size=129,
+                                                padding=64,
+                                                groups=16,
+                                                stride=self.config.downsample_rate)
 
     def up_sample_frames(self, spec, return_first=False):
+        if self.config.downsample_type == 'Conv':
+            return self.up_deconv(spec.transpose(1, 2)).transpose(1, 2).contiguous()
+
         dr = self.config.downsample_rate
-        if len(spec.shape) != 4: 
+        if len(spec.shape) != 3: 
             spec = spec.unsqueeze(0)
-            assert(len(spec.shape) == 4), 'Input should have acoustic feature of shape BxCxTxD'
-        # spec shape: [batch_size, n_src, sequence_length // downsample_rate, output_dim * downsample_rate]
-        spec_flatten = spec.view(spec.shape[0], spec.shape[1], spec.shape[2]*dr, spec.shape[3]//dr)
+            assert(len(spec.shape) == 3), 'Input should have acoustic feature of shape BxTxD'
+        # spec shape: [batch_size, sequence_length // downsample_rate, output_dim * downsample_rate]
+        spec_flatten = spec.view(spec.shape[0], spec.shape[1]*dr, spec.shape[2]//dr)
         if return_first: return spec_flatten[0]
         return spec_flatten # spec_flatten shape: [batch_size, n_src, sequence_length * downsample_rate, output_dim // downsample_rate]
 
     def down_sample_frames(self, spec):
+        if self.config.downsample_type == 'Conv':
+            return self.down_conv(spec.transpose(1, 2)).transpose(1, 2).contiguous()
         dr = self.config.downsample_rate
         left_over = spec.shape[1] % dr
         if left_over != 0: spec = spec[:, :-left_over, :]
@@ -95,7 +114,10 @@ class TransformerForTasnet(TransformerInitModel):
         batch_size = spec_stacked.shape[0]
         seq_len = spec_stacked.shape[1]
         
-        pos_enc = fast_position_encoding(seq_len, hidden_size).to(dtype=spec_stacked.dtype, device=spec_stacked.device)
+        if self.config.pos_enc == 'Conv':
+            pos_enc = None
+        else:
+            pos_enc = fast_position_encoding(seq_len, hidden_size).to(dtype=spec_stacked.dtype, device=spec_stacked.device)
         attn_mask = spec.new_ones((batch_size, seq_len))
         
         for idx in range(len(spec_stacked)):
@@ -118,10 +140,10 @@ class TransformerForTasnet(TransformerInitModel):
         else:
             sequence_output = transformer_output # [batch, n_frames, n_filters]
         pred_spec, pred_state = self.SpecHead(sequence_output) # [batch, n_frames, n_filters]
-        pred_tf_rep = self.up_sample_frames(pred_spec)
+        pred_tf_rep = self.up_sample_frames(pred_spec)  # [batch, n_frames, n_filters]
 
-        pred_tf_rep = pred_tf_rep.transpose(1,2).contiguous()
-        pred_wav = torch_utils.pad_x_to_y(self.decoder(pred_tf_rep), x)
+        pred_tf_rep = pred_tf_rep.transpose(1,2).contiguous()   # [batch, n_filters, n_frames]
+        pred_wav = torch_utils.pad_x_to_y(self.decoder(pred_tf_rep), x).squeeze()
         if wav_label is not None and mask_label is not None:
             assert mask_label.sum() > 0, 'Without any masking, loss might go NaN. Modify your data preprocessing (utility/mam.py)'
             loss = self.criterion(pred_wav.masked_select(mask_label), wav_label.masked_select(mask_label))

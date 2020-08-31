@@ -30,6 +30,7 @@ class SeparationConfig(object):
         self.segment = config['separation']['segment']
         self.n_src = config['separation']['n_src']
         self.fb_name = config['separation']['fb_name']
+        self.p_inv = config['separation']['p_inv'] if 'p_inv' in config['separation'] else 'dec'
 
 class ModelConfig(TransformerConfig, SeparationConfig):
     def __init__(self, config):
@@ -45,7 +46,7 @@ class ConvTasnet(TransformerInitModel):
                                                      kernel_size=self.config.kernel_size,
                                                      stride=self.config.stride,
                                                      sample_rate=self.config.sample_rate,
-                                                     who_is_pinv='dec')
+                                                     who_is_pinv=self.config.p_inv)
         self.masker = TDConvNet(in_chan=self.encoder.filterbank.n_feats_out,
                                 out_chan=self.encoder.filterbank.n_feats_out,
                                 n_src=self.config.n_src)
@@ -133,7 +134,10 @@ class TransformerForTasnet(TransformerInitModel):
         batch_size = spec_stacked.shape[0]
         seq_len = spec_stacked.shape[1]
         
-        pos_enc = fast_position_encoding(seq_len, hidden_size).to(dtype=spec_stacked.dtype, device=spec_stacked.device)
+        if self.config.pos_enc == 'Conv':
+            pos_enc = None
+        else:
+            pos_enc = fast_position_encoding(seq_len, hidden_size).to(dtype=spec_stacked.dtype, device=spec_stacked.device)
         attn_mask = spec.new_ones((batch_size, seq_len))
 
         for idx in range(len(spec_stacked)):

@@ -220,7 +220,7 @@ def process_test_MAM_data(spec, config=None):
     return spec_stacked, pos_enc, attn_mask # (x, pos_enc, attention_mask)
 
 
-def process_wav_MAM_data(spec, config=None):
+def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=None):
     """Process training data for the masked acoustic model"""
 
     dr = config.downsample_rate if config is not None else DR
@@ -235,35 +235,36 @@ def process_wav_MAM_data(spec, config=None):
     test_reconstruct = False
 
     with torch.no_grad():
-        if len(spec) == 2: # if self.duo_feature: dataloader will output `source_spec` and `target_spec`
-            source_spec = spec[0]   # (batch_size, seq_len)
-            target_spec = spec[1]   # (batch_size, seq_len)
-        elif len(spec) == 1:
-            source_spec = spec[0]
-            target_spec = copy.deepcopy(spec[0])
-        else:
-            raise NotImplementedError('Input spec sould be either (spec,) or (target_spec, source_spec), where `spec` has shape BxTxD.')
+        # if len(wav) == 2: # if self.duo_feature: dataloader will output `source_wav` and `target_wav`
+            # source_wav = wav[0]   # (batch_size, seq_len)
+            # target_wav = wav[1]   # (batch_size, seq_len)
+        # elif len(wav) == 1:
+            # source_wav = wav[0]
+            # target_wav = copy.deepcopy(wav[0])
+        # else:
+            # raise NotImplementedError('Input wav sould be either (wav,) or (target_wav, source_wav), where `wav` has shape BxT.')
 
-        # Down sample
-        # spec_masked = down_sample_frames(source_spec, dr) # (batch_size, seq_len, mel_dim * dr)
-        # spec_stacked = down_sample_frames(target_spec, dr) # (batch_size, seq_len, mel_dim * dr)
-        # assert(spec_masked.shape[1] == spec_stacked.shape[1]), 'Input and output spectrogram should have the same shape'
+        # # Down sample
+        # # wav_masked = down_sample_frames(source_wav, dr) # (batch_size, seq_len, mel_dim * dr)
+        # # wav_stacked = down_sample_frames(target_wav, dr) # (batch_size, seq_len, mel_dim * dr)
+        # # assert(wav_masked.shape[1] == wav_stacked.shape[1]), 'Input and output wavtrogram should have the same shape'
+        # wav_masked = source_wav
+        # wav_stacked = target_wav
+        wav_masked = clean_wav
+        wav_stacked = clean_wav
 
         # Record length for each uttr
-        batch_size = spec_stacked.shape[0]
-        seq_len = spec_stacked.shape[1]
-        spec_len = [(s != 0).nonzero(as_tuple=True)[0].max() for s in source_spec]
+        batch_size = wav_stacked.shape[0]
+        # seq_len = wav_stacked.shape[1]
+        wav_len = [(s != 0).nonzero(as_tuple=True)[0].max().item()+1 for s in wav_stacked]
         
-        # pos_enc = fast_position_encoding(seq_len, hidden_size) # (seq_len, hidden_size)
-        mask_label = torch.zeros_like(spec_stacked, dtype=torch.uint8)
-        attn_mask = torch.ones((batch_size, seq_len)) # (batch_size, seq_len)
+        mask_label = torch.zeros_like(wav_stacked, dtype=torch.uint8)
 
         for idx in range(batch_size):
             # zero vectors for padding dimension
-            attn_mask[idx, spec_len[idx]:] = 0
 
             if test_reconstruct:
-                mask_label[idx, :, :] = 1
+                mask_label[idx, :] = 1
                 continue
 
             def starts_to_intervals(starts, consecutive):
@@ -274,8 +275,8 @@ def process_wav_MAM_data(spec, config=None):
             
             # time masking
             mask_consecutive = random.randint(mask_consecutive_min, mask_consecutive_max)
-            valid_start_max = max(spec_len[idx] - mask_consecutive - 1, 0) # compute max valid start point for a consecutive mask
-            proportion = round(spec_len[idx] * mask_proportion / mask_consecutive)
+            valid_start_max = max(wav_len[idx] - mask_consecutive - 1, 0) # compute max valid start point for a consecutive mask
+            proportion = round(wav_len[idx] * mask_proportion / mask_consecutive)
             if mask_allow_overlap:
                 # draw `proportion` samples from the range (0, valid_index_range) and without replacement
                 chosen_starts = torch.randperm(valid_start_max + 1)[:proportion]
@@ -290,25 +291,25 @@ def process_wav_MAM_data(spec, config=None):
             dice = random.random()
             # mask to zero
             if dice < 0.8:
-                spec_masked[idx, chosen_intervals, :] = 0
+                wav_masked[idx, chosen_intervals] = 0
             # replace to random frames
             elif dice >= 0.8 and dice < 0.9:
                 random_starts = torch.randperm(valid_start_max + 1)[:proportion]
                 random_intervals = starts_to_intervals(random_starts, mask_consecutive)
-                spec_masked[idx, chosen_intervals, :] = spec_masked[idx, random_intervals, :]
+                wav_masked[idx, chosen_intervals] = wav_masked[idx, random_intervals]
             # do nothing
             else:
                 pass
 
             # the gradients will be calculated on chosen frames
-            mask_label[idx, chosen_intervals, :] = 1
+            mask_label[idx, chosen_intervals] = 1
 
             # # frequency masking
             # if mask_frequency > 0:
                 # rand_bandwidth = random.randint(0, mask_frequency)
-                # chosen_starts = torch.randperm(spec_masked.shape[2] - rand_bandwidth)[:1]
+                # chosen_starts = torch.randperm(wav_masked.shape[2] - rand_bandwidth)[:1]
                 # chosen_intervals = starts_to_intervals(chosen_starts, rand_bandwidth)
-                # spec_masked[idx, :, chosen_intervals] = 0
+                # wav_masked[idx, :, chosen_intervals] = 0
                 
                 # # the gradients will be calculated on chosen frames
                 # mask_label[idx, :, chosen_intervals] = 1   
@@ -317,17 +318,16 @@ def process_wav_MAM_data(spec, config=None):
             # noise augmentation
             dice = random.random()
             if dice < noise_proportion:
-                noise_sampler = torch.distributions.Normal(0, 0.2)
-                spec_masked += noise_sampler.sample(spec_masked.shape).to(device=spec_masked.device)
+                wav_masked += noise_wav
+                # noise_sampler = torch.distributions.Normal(0, 0.2)
+                # wav_masked += noise_sampler.sample(wav_masked.shape).to(device=wav_masked.device)
         
         valid_batchid = mask_label.view(batch_size, -1).sum(dim=-1).nonzero().view(-1)
         batch_is_valid = len(valid_batchid) > 0
-        spec_masked = spec_masked.to(dtype=torch.float32)[valid_batchid]
-        # pos_enc = pos_enc.to(dtype=torch.float32)
+        wav_masked = wav_masked.to(dtype=torch.float32)[valid_batchid]
         mask_label = mask_label.to(dtype=torch.bool)[valid_batchid]
-        attn_mask = attn_mask.to(dtype=torch.float32)[valid_batchid]
-        spec_stacked = spec_stacked.to(dtype=torch.float32)[valid_batchid]
+        wav_stacked = wav_stacked.to(dtype=torch.float32)[valid_batchid]
 
-    return batch_is_valid, spec_masked, pos_enc, mask_label, attn_mask, spec_stacked
+    return batch_is_valid, wav_masked, mask_label, wav_stacked
 
 

@@ -17,9 +17,9 @@ import random
 import numpy as np
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from tasks.separation.model import ModelConfig, TransformerForTasnet, ConvTasnet
+from tasks.wavbert.model import ModelConfig, TransformerForWavBert
 from transformer.optimization import BertAdam, WarmupLinearSchedule
-from transformer.mam import fast_position_encoding
+from transformer.mam import fast_position_encoding, process_wav_MAM_data
 from utility.audio import plot_spectrogram_to_numpy
 
 
@@ -66,12 +66,8 @@ class Runner():
         # build the Transformer model with speech prediction head
         model_config = ModelConfig(self.config)
         self.dr = model_config.downsample_rate
-        self.hidden_size = model_config.hidden_size
         
-        if self.config['model']['tasnet'] == 'ConvTasnet':
-            self.model = ConvTasnet(model_config, self.input_dim, self.output_dim).to(self.device)
-        elif self.config['model']['tasnet'] == 'Transformer':
-            self.model = TransformerForTasnet(model_config, self.input_dim, self.output_dim).to(self.device)
+        self.model = TransformerForWavBert(model_config, self.input_dim, self.output_dim).to(self.device)
         self.model.train()
 
         if self.args.multi_gpu:
@@ -116,6 +112,8 @@ class Runner():
         all_states = {
             'encoder': self.model.encoder.state_dict() if not self.args.multi_gpu else self.model.module.encoder.state_dict(),
             'decoder': self.model.decoder.state_dict() if not self.args.multi_gpu else self.model.module.decoder.state_dict(),
+            'SpecHead': self.model.SpecHead.state_dict() if not self.args.multi_gpu else self.model.module.SpecHead.state_dict(),
+            'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
             'Optimizer': self.optimizer.state_dict(),
             'Global_step': self.global_step,
             'Settings': {
@@ -123,15 +121,6 @@ class Runner():
                 'Paras': self.args,
             },
         }
-        if self.config['model']['tasnet'] == 'ConvTasnet':
-            all_states.update({
-                'masker': self.model.masker.state_dict() if not self.args.multi_gpu else self.model.module.masker.state_dict(),
-            })
-        elif self.config['model']['tasnet'] == 'Transformer':
-            all_states.update({
-                'MaskerHead': self.model.MaskerHead.state_dict() if not self.args.multi_gpu else self.model.module.MaskerHead.state_dict(),
-                'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
-            })
 
         if to_path is None:
             new_model_path = '{}/{}-{}.ckpt'.format(self.ckpdir, name, self.global_step)
@@ -146,32 +135,23 @@ class Runner():
             self.model_kept.pop(0)
 
 
-    def process_data(self, spec):
+    def process_data(self, batch):
         """Process training data for the masked acoustic model"""
         with torch.no_grad():
             
-            assert(len(spec) == 5), 'dataloader should return (spec_masked, pos_enc, mask_label, attn_mask, spec_stacked)'
+            assert(len(batch) == 2), 'dataloader should return (mixture, sources)'
             # Unpack and Hack bucket: Bucketing should cause acoustic feature to have shape 1xBxTxD'
-            spec_masked = spec[0].squeeze(0)
-            pos_enc = spec[1].squeeze(0)
-            mask_label = spec[2].squeeze(0)
-            attn_mask = spec[3].squeeze(0)
-            spec_stacked = spec[4].squeeze(0)
+            mixture, sources = batch
+            assert self.config['dataloader']['task'] == 'enh_single', 'dataloader task should be "enh_single"'
+            noisy_wav = mixture
+            clean_wav = sources[:, 0]
+            noise_wav = noisy_wav - clean_wav
+            batch_is_valid, wav_masked, mask_label, wav_stacked = process_wav_MAM_data(clean_wav=clean_wav, noise_wav=noise_wav)
+            wav_masked = wav_masked.to(device=self.device)
+            mask_label = mask_label.to(device=self.device)
+            wav_stacked = wav_stacked.to(device=self.device)
 
-            spec_masked = spec_masked.to(device=self.device)
-            if pos_enc.dim() == 3:
-                # pos_enc: (batch_size, seq_len, hidden_size)
-                # GPU memory need (batch_size * seq_len * hidden_size)
-                pos_enc = torch.FloatTensor(pos_enc).to(device=self.device)
-            elif pos_enc.dim() == 2:
-                # pos_enc: (seq_len, hidden_size)
-                # GPU memory only need (seq_len * hidden_size) even after expanded
-                pos_enc = torch.FloatTensor(pos_enc).to(device=self.device).expand(spec_masked.size(0), *pos_enc.size())
-            mask_label = torch.ByteTensor(mask_label).to(device=self.device)
-            attn_mask = torch.FloatTensor(attn_mask).to(device=self.device)
-            spec_stacked = spec_stacked.to(device=self.device)
-
-        return spec_masked, pos_enc, mask_label, attn_mask, spec_stacked # (x, pos_enc, mask_label, attention_mask. y)
+        return batch_is_valid, wav_masked, mask_label, wav_stacked # (x, pos_enc, mask_label, attention_mask. y)
 
 
     def train(self):
@@ -186,13 +166,12 @@ class Runner():
             loss_val = 0
             for batch in progress:
                 try:
+                    batch_is_valid, wav_masked, mask_label, wav_stacked = self.process_data(batch)
                     if self.global_step > self.total_steps: break
+                    if not batch_is_valid: continue
                     step += 1
                     
-                    mixture, sources = batch
-                    mixture = mixture.to(device=self.device)
-                    sources = sources.to(device=self.device)
-                    loss, est_sources = self.model(mixture, labels=sources)
+                    loss, est_sources = self.model(wav_masked, wav_label=wav_stacked, mask_label=mask_label)
                     
                     # Accumulate Loss
                     if self.gradient_accumulation_steps > 1:
@@ -204,8 +183,12 @@ class Runner():
                     elif self.args.multi_gpu:
                         loss = loss.sum()
                         loss.backward()
+                        # log_loss = torch.log10(loss)
+                        # log_loss.backward()
                     else:
                         loss.backward()
+                        # log_loss = torch.log10(loss)
+                        # log_loss.backward()
                     loss_val += loss.item()
 
                     # Update

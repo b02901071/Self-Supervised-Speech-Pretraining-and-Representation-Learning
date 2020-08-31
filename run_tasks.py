@@ -38,7 +38,7 @@ def get_task_args():
     parser = argparse.ArgumentParser(description='Argument Parser for Upstream Models of the S3PLR project.')
 
     # required
-    parser.add_argument('--run',  choices=['separation'], help='Select task. \
+    parser.add_argument('--run',  choices=['separation', 'wavbert'], help='Select task. \
                         For the transformer models, which type of pre-training (mockingjay, tera, aalbert, etc) \
                         is determined by config file.', required=True)
     parser.add_argument('--config', type=str, help='Path to experiment config.', required=True)
@@ -84,12 +84,15 @@ def get_dataloader(args, config):
 # RUN TRANSFORMER #
 ###################
 def run_task(args, config):
-    from tasks.separation.runner import Runner
+    if args.run == 'separation':
+        from tasks.separation.runner import Runner
+    elif args.run == 'wavbert':
+        from tasks.wavbert.runner import Runner
 
     # mkdir
     if args.ckpdir == '':
         if args.name is None: args.name = 'run_' + str(random.randint(0, 999))
-        ckpdir = os.path.join('result/result_task/', args.name)
+        ckpdir = os.path.join('result/result_task/', args.run, args.name)
     else:
         ckpdir = args.ckpdir
     if not os.path.exists(ckpdir):
