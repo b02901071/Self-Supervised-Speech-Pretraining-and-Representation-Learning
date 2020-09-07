@@ -13,8 +13,8 @@ model:                                                  # downstream model confi
     initializer_range: 0.02                               # The sttdev of the truncated_normal_initializer for initializing all weight matrices.
     layer_norm_eps: "1e-12"                               # The epsilon used by LayerNorm.
     mask_proportion: 0.15                                 # mask this percentage of all spectrogram frames in each sequence at random during MAM training                        
-    mask_consecutive_min: 7                               # mask this amount of consecutive frames
-    mask_consecutive_max: 7                               # mask this amount of consecutive frames
+    mask_consecutive_min: 0.01                               # mask this amount of consecutive frames
+    mask_consecutive_max: 0.01                               # mask this amount of consecutive frames
     mask_allow_overlap: True                              # allow overlap masking
     mask_bucket_ratio: 1.2                                # only used when overlap is not allowed. sample a mask from each bucket in size of [sampled mask_consecutive * mask_bucket_ratio]
     mask_frequency: 16                                    # mask maximum this amount of frequency bands, set to 0 for no frequency mask
@@ -32,8 +32,8 @@ model:                                                  # downstream model confi
     sample_rate: &sample_rate 8000
     segment: &seg_len 3                                       # length of segment in second
     n_src: &n_src 1
-    fb_name: 'param_sinc'
-    p_inv: 'dec'
+    fb_name: 'free'
+    p_inv: null
 
 
 optimizer: 

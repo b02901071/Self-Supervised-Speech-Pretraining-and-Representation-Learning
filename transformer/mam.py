@@ -250,8 +250,8 @@ def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=
         # # assert(wav_masked.shape[1] == wav_stacked.shape[1]), 'Input and output wavtrogram should have the same shape'
         # wav_masked = source_wav
         # wav_stacked = target_wav
-        wav_masked = clean_wav
-        wav_stacked = clean_wav
+        wav_masked = clean_wav.clone()
+        wav_stacked = clean_wav.clone()
 
         # Record length for each uttr
         batch_size = wav_stacked.shape[0]
@@ -290,7 +290,7 @@ def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=
             # determine whether to mask / random / or do nothing to the frame
             dice = random.random()
             # mask to zero
-            if dice < 0.8:
+            if dice < 0.8 or idx == 0:
                 wav_masked[idx, chosen_intervals] = 0
             # replace to random frames
             elif dice >= 0.8 and dice < 0.9:
@@ -318,9 +318,17 @@ def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=
             # noise augmentation
             dice = random.random()
             if dice < noise_proportion:
-                wav_masked += noise_wav
+                wav_masked += (noise_wav.clone() * 0.5)
                 # noise_sampler = torch.distributions.Normal(0, 0.2)
                 # wav_masked += noise_sampler.sample(wav_masked.shape).to(device=wav_masked.device)
+            else:
+                wav_masked[0] += (noise_wav.clone()[0] * 0.5)
+
+        scale = torch.max(
+            torch.max(wav_masked.max(dim=1, keepdim=True)[0], wav_stacked.max(dim=1, keepdim=True)[0]),
+            -torch.min(wav_masked.min(dim=1, keepdim=True)[0], wav_stacked.min(dim=1, keepdim=True)[0]))
+        wav_masked = wav_masked.clone() / scale
+        wav_stacked = wav_stacked.clone() / scale
         
         valid_batchid = mask_label.view(batch_size, -1).sum(dim=-1).nonzero().view(-1)
         batch_is_valid = len(valid_batchid) > 0

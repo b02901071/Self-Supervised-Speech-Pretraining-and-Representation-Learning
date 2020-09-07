@@ -216,6 +216,25 @@ def _save_figure_to_numpy(fig):
 
 
 #############################
+# PLOT WAVEFORM TO NUMPY #
+#############################
+def plot_waveform_to_numpy(waveform):
+    times = np.arange(len(waveform)) / 8000.0
+    fig, ax = plt.subplots(figsize=(12, 3))
+    ax.plot(times, waveform)
+    ax.set_ylim([-1,1])
+    plt.xlabel("Time")
+    plt.ylabel("Amplitude")
+    plt.tight_layout()
+    plt.savefig('wave.png')
+
+    fig.canvas.draw()
+    data = _save_figure_to_numpy(fig)
+    plt.close()
+    return data
+
+
+#############################
 # PLOT SPECTROGRAM TO NUMPY #
 #############################
 def plot_spectrogram_to_numpy(spectrogram):

@@ -20,7 +20,7 @@ from tensorboardX import SummaryWriter
 from tasks.wavbert.model import ModelConfig, TransformerForWavBert
 from transformer.optimization import BertAdam, WarmupLinearSchedule
 from transformer.mam import fast_position_encoding, process_wav_MAM_data
-from utility.audio import plot_spectrogram_to_numpy
+from utility.audio import plot_spectrogram_to_numpy, plot_waveform_to_numpy
 
 
 ##########
@@ -146,7 +146,10 @@ class Runner():
             noisy_wav = mixture
             clean_wav = sources[:, 0]
             noise_wav = noisy_wav - clean_wav
-            batch_is_valid, wav_masked, mask_label, wav_stacked = process_wav_MAM_data(clean_wav=clean_wav, noise_wav=noise_wav)
+            batch_is_valid, wav_masked, mask_label, wav_stacked = process_wav_MAM_data(clean_wav=clean_wav.clone(),
+                                                                                       noisy_wav=noisy_wav.clone(),
+                                                                                       noise_wav=noise_wav.clone(),
+                                                                                       config=self.model.config)
             wav_masked = wav_masked.to(device=self.device)
             mask_label = mask_label.to(device=self.device)
             wav_stacked = wav_stacked.to(device=self.device)
@@ -171,7 +174,7 @@ class Runner():
                     if not batch_is_valid: continue
                     step += 1
                     
-                    loss, est_sources = self.model(wav_masked, wav_label=wav_stacked, mask_label=mask_label)
+                    loss, pred_wav = self.model(wav_masked, wav_label=wav_stacked, mask_label=mask_label)
                     
                     # Accumulate Loss
                     if self.gradient_accumulation_steps > 1:
@@ -217,6 +220,25 @@ class Runner():
 
                         if self.global_step % self.save_step == 0:
                             self.save_model('states')
+                            self.log.add_audio('mask_wave', wav_masked.clone()[0], self.global_step, 8000)
+                            self.log.add_audio('pred_wave', pred_wav.clone()[0], self.global_step, 8000)
+                            self.log.add_audio('true_wave', wav_stacked.clone()[0], self.global_step, 8000)
+                            # only show masked parts
+                            mask_wav_select = plot_waveform_to_numpy(wav_masked.masked_select(mask_label).data.cpu().numpy())
+                            pred_wav_select = plot_waveform_to_numpy(pred_wav.masked_select(mask_label).data.cpu().numpy())
+                            true_wav_select = plot_waveform_to_numpy(wav_stacked.masked_select(mask_label).data.cpu().numpy())
+                            self.log.add_image('mask_wave', mask_wav_select, self.global_step)
+                            self.log.add_image('pred_wave', pred_wav_select, self.global_step)
+                            self.log.add_image('true_wave', true_wav_select, self.global_step)
+                            # spectrogram
+                            mask_wave = plot_waveform_to_numpy(wav_masked[0].data.cpu().numpy())
+                            pred_wave = plot_waveform_to_numpy(pred_wav[0].data.cpu().numpy())
+                            true_wave = plot_waveform_to_numpy(wav_stacked[0].data.cpu().numpy())
+                            self.log.add_image('mask_spec', mask_wave, self.global_step)
+                            self.log.add_image('pred_spec', pred_wave, self.global_step)
+                            self.log.add_image('true_spec', true_wave, self.global_step)
+
+                            print(torch.nonzero(mask_label[0], as_tuple=True))
 
                         loss_val = 0
                         pbar.update(1)
