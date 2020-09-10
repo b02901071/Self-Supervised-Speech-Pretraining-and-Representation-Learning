@@ -66,7 +66,6 @@ class Runner():
         # build the Transformer model with speech prediction head
         model_config = ModelConfig(self.config)
         self.dr = model_config.downsample_rate
-        self.hidden_size = model_config.hidden_size
         
         if self.config['model']['tasnet'] == 'ConvTasnet':
             self.model = ConvTasnet(model_config, self.input_dim, self.output_dim).to(self.device)

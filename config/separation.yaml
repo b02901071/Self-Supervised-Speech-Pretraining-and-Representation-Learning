@@ -33,13 +33,14 @@ model:                                                  # downstream model confi
     segment: &seg_len 3                                       # length of segment in second
     n_src: &n_src 2
     fb_name: 'param_sinc'
+    p_inv: null
 
 
 optimizer: 
   learning_rate: "4e-4"                                 # Learning rate for opt. "4e-4" for 'data/libri_mel160_subword5000', "2e-4" for 'data/libri_fmllr_cmvn'
   loss_scale: 0                                         # Loss scale to improve fp16 numeric stability. Only used when apex is set to True. 0: dynamic loss scaling. positive power of 2: static loss scaling.
   warmup_proportion: 0.07                               # Proportion of training to perform linear rate warmup.
-  gradient_accumulation_steps: 3                        # Number of updates steps to accumulate before performing a backward/update pass
+  gradient_accumulation_steps: 1                        # Number of updates steps to accumulate before performing a backward/update pass
   gradient_clipping: 1.0                                # Maximum gradient norm
 
 

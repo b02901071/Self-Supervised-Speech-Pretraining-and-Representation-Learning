@@ -83,7 +83,7 @@ class TransformerForTasnet(TransformerInitModel):
                                                      kernel_size=self.config.kernel_size,
                                                      stride=self.config.stride,
                                                      sample_rate=self.config.sample_rate,
-                                                     who_is_pinv='dec')
+                                                     who_is_pinv=self.config.p_inv)
 
         self.criterion = PITLossWrapper(pairwise_neg_sisdr, pit_from='pw_mtx')
         if self.config.downsample_type == 'Conv':
