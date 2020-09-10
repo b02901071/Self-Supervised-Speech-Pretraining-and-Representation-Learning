@@ -13,6 +13,7 @@
 import os
 import math
 import torch
+import torchvision
 import random
 import numpy as np
 from tqdm import tqdm
@@ -223,20 +224,31 @@ class Runner():
                             self.log.add_audio('mask_wave', wav_masked.clone()[0], self.global_step, 8000)
                             self.log.add_audio('pred_wave', pred_wav.clone()[0], self.global_step, 8000)
                             self.log.add_audio('true_wave', wav_stacked.clone()[0], self.global_step, 8000)
-                            # only show masked parts
-                            mask_wav_select = plot_waveform_to_numpy(wav_masked.masked_select(mask_label).data.cpu().numpy())
-                            pred_wav_select = plot_waveform_to_numpy(pred_wav.masked_select(mask_label).data.cpu().numpy())
-                            true_wav_select = plot_waveform_to_numpy(wav_stacked.masked_select(mask_label).data.cpu().numpy())
-                            self.log.add_image('mask_wave', mask_wav_select, self.global_step)
-                            self.log.add_image('pred_wave', pred_wav_select, self.global_step)
-                            self.log.add_image('true_wave', true_wav_select, self.global_step)
-                            # spectrogram
-                            mask_wave = plot_waveform_to_numpy(wav_masked[0].data.cpu().numpy())
-                            pred_wave = plot_waveform_to_numpy(pred_wav[0].data.cpu().numpy())
-                            true_wave = plot_waveform_to_numpy(wav_stacked[0].data.cpu().numpy())
-                            self.log.add_image('mask_spec', mask_wave, self.global_step)
-                            self.log.add_image('pred_spec', pred_wave, self.global_step)
-                            self.log.add_image('true_spec', true_wave, self.global_step)
+
+                            # waveform
+                            mask_wave = torch.tensor(plot_waveform_to_numpy(wav_masked[0].data.cpu().numpy()))
+                            mask_wave_select = torch.tensor(plot_waveform_to_numpy(wav_masked.masked_select(mask_label).data.cpu().numpy()))
+                            mask_wave_image = torchvision.utils.make_grid([mask_wave, mask_wave_select], nrow=2)
+                            self.log.add_image('mask_wave_img/0', mask_wave, self.global_step)
+                            self.log.add_image('mask_wave_img/mask', mask_wave_select, self.global_step)
+                            # self.log.add_images('mask_wave_img', torch.stack([mask_wave, mask_wave_select]), self.global_step)
+                            # self.log.add_images('mask_wave_img', mask_wave_image, self.global_step)
+
+                            pred_wave = torch.tensor(plot_waveform_to_numpy(pred_wav[0].data.cpu().numpy()))
+                            pred_wave_select = torch.tensor(plot_waveform_to_numpy(pred_wav.masked_select(mask_label).data.cpu().numpy()))
+                            pred_wave_image = torchvision.utils.make_grid([pred_wave, pred_wave_select], nrow=2)
+                            self.log.add_image('pred_wave_img/0', pred_wave, self.global_step)
+                            self.log.add_image('pred_wave_img/mask', pred_wave_select, self.global_step)
+                            # self.log.add_images('pred_wave_img', torch.stack([pred_wave, pred_wave_select]), self.global_step)
+                            # self.log.add_images('pred_wave_img', pred_wave_image, self.global_step)
+
+                            true_wave = torch.tensor(plot_waveform_to_numpy(wav_stacked[0].data.cpu().numpy()))
+                            true_wave_select = torch.tensor(plot_waveform_to_numpy(wav_stacked.masked_select(mask_label).data.cpu().numpy()))
+                            true_wave_image = torchvision.utils.make_grid([true_wave, true_wave_select], nrow=2)
+                            self.log.add_image('true_wave_img/0', true_wave, self.global_step)
+                            self.log.add_image('true_wave_img/mask', true_wave_select, self.global_step)
+                            # self.log.add_images('true_wave_img', torch.stack([true_wave, true_wave_select]), self.global_step)
+                            # self.log.add_images('true_wave_img', true_wave_image, self.global_step)
 
                             print(torch.nonzero(mask_label[0], as_tuple=True))
 
