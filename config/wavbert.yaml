@@ -4,7 +4,7 @@ model:                                                  # downstream model confi
     input_dim: &input_dim 512                                         # `int`, 39 for mfcc, 40 for fmllr, 80 for fbank, 160 for mel
     downsample_rate: 4                                    # stacked consecutive features vectors to reduce the length of input sequences by this factor.
     hidden_size: 768                                      # Size of the encoder layers and the pooler layer.
-    num_hidden_layers: 3                                  # Number of hidden layers in the Transformer encoder.
+    num_hidden_layers: 6                                  # Number of hidden layers in the Transformer encoder.
     num_attention_heads: 12                               # Number of attention heads for each attention layer in the Transformer encoder.
     intermediate_size: 3072                               # The size of the "intermediate" (i.e., feed-forward) layer in the Transformer encoder.
     hidden_act: "gelu"                                    # The non-linear activation function (function or string) in the encoder and pooler. If string, "gelu", "relu" and "swish" are supported.
@@ -46,7 +46,7 @@ optimizer:
 
 dataloader:
   n_jobs: 6                                             # Subprocess used for torch Dataloader
-  batch_size: 12                                         # training batch size, 12 for pre-train, 6 for cpc exp
+  batch_size: 6                                         # training batch size, 12 for pre-train, 6 for cpc exp
   dev_batch_size: 12                                    # used for dev/test splits
   max_timestep: 0                                       # Max length for audio feature (0 for no restriction)
 

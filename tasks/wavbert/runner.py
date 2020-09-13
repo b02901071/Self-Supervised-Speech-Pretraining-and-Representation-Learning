@@ -111,6 +111,7 @@ class Runner():
 
     def save_model(self, name='states', to_path=None):
         all_states = {
+            'model': self.model.state_dict() if not self.args.multi_gpu else self.model.module.state_dict(),
             'encoder': self.model.encoder.state_dict() if not self.args.multi_gpu else self.model.module.encoder.state_dict(),
             'decoder': self.model.decoder.state_dict() if not self.args.multi_gpu else self.model.module.decoder.state_dict(),
             'SpecHead': self.model.SpecHead.state_dict() if not self.args.multi_gpu else self.model.module.SpecHead.state_dict(),
