@@ -32,7 +32,7 @@ model:                                                  # downstream model confi
     sample_rate: &sample_rate 8000
     segment: &seg_len 3                                       # length of segment in second
     n_src: &n_src 2
-    fb_name: 'param_sinc'
+    fb_name: 'free'
     p_inv: null
 
 

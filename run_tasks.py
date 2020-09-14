@@ -53,7 +53,7 @@ def get_task_args():
     parser.add_argument('--cpu', action='store_true', help='Disable GPU training.')
     parser.add_argument('--multi_gpu', action='store_true', help='Enable Multi-GPU training.')
     parser.add_argument('--test_reconstruct', action='store_true', help='Test reconstruction capability')
-    parser.add_argument('--load', default='', type=str, help='Path to load checkpoint result.', required=False)
+    parser.add_argument('--load', default=None, type=str, help='Path to load checkpoint result.', required=False)
 
     # parse
     args = parser.parse_args()
