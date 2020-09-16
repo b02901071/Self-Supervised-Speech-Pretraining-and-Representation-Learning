@@ -18,7 +18,7 @@ import random
 import numpy as np
 from tqdm import tqdm
 from tensorboardX import SummaryWriter
-from tasks.wavbert.model import ModelConfig, TransformerForWavBert
+from tasks.wavbert.model import ModelConfig, TransformerForWaveBert, ConvTasnetForWaveBert
 from transformer.optimization import BertAdam, WarmupLinearSchedule
 from transformer.mam import fast_position_encoding, process_wav_MAM_data
 from utility.audio import plot_spectrogram_to_numpy, plot_waveform_to_numpy
@@ -68,7 +68,10 @@ class Runner():
         model_config = ModelConfig(self.config)
         self.dr = model_config.downsample_rate
         
-        self.model = TransformerForWavBert(model_config, self.input_dim, self.output_dim).to(self.device)
+        if self.config['model']['tasnet'] == 'ConvTasnet':
+            self.model = ConvTasnetForWaveBert(model_config, self.input_dim, self.output_dim).to(self.device)
+        elif self.config['model']['tasnet'] == 'Transformer':
+            self.model = TransformerForWaveBert(model_config, self.input_dim, self.output_dim).to(self.device)
         self.model.train()
 
         if self.args.multi_gpu:
@@ -112,10 +115,10 @@ class Runner():
     def save_model(self, name='states', to_path=None):
         all_states = {
             'model': self.model.state_dict() if not self.args.multi_gpu else self.model.module.state_dict(),
-            'encoder': self.model.encoder.state_dict() if not self.args.multi_gpu else self.model.module.encoder.state_dict(),
-            'decoder': self.model.decoder.state_dict() if not self.args.multi_gpu else self.model.module.decoder.state_dict(),
-            'SpecHead': self.model.SpecHead.state_dict() if not self.args.multi_gpu else self.model.module.SpecHead.state_dict(),
-            'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
+            # 'encoder': self.model.encoder.state_dict() if not self.args.multi_gpu else self.model.module.encoder.state_dict(),
+            # 'decoder': self.model.decoder.state_dict() if not self.args.multi_gpu else self.model.module.decoder.state_dict(),
+            # 'SpecHead': self.model.SpecHead.state_dict() if not self.args.multi_gpu else self.model.module.SpecHead.state_dict(),
+            # 'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
             'Optimizer': self.optimizer.state_dict(),
             'Global_step': self.global_step,
             'Settings': {

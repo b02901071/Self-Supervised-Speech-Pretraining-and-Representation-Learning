@@ -17,11 +17,11 @@ from transformer.model import TransformerConfig, TransformerInitModel, Transform
 from transformer.mam import fast_position_encoding, process_wav_MAM_data
 import asteroid.filterbanks as fb
 from asteroid import torch_utils
-from asteroid.losses import PITLossWrapper, pairwise_neg_sisdr
+from asteroid.losses import PITLossWrapper, singlesrc_neg_sisdr
 from asteroid.masknn import TDConvNet
 
 
-class WavBertConfig(object):
+class WaveBertConfig(object):
     def __init__(self, config):
         self.n_filters = config['separation']['n_filters']
         self.kernel_size = config['separation']['kernel_size']
@@ -40,18 +40,53 @@ class WavBertConfig(object):
         self.mask_frequency = config['transformer']['mask_frequency']
         self.noise_proportion = config['transformer']['noise_proportion']
 
-class ModelConfig(TransformerConfig, WavBertConfig):
+class ModelConfig(TransformerConfig, WaveBertConfig):
     def __init__(self, config):
         TransformerConfig.__init__(self, config['model'])
-        WavBertConfig.__init__(self, config['model'])
+        WaveBertConfig.__init__(self, config['model'])
 
 
+class ConvTasnetForWaveBert(TransformerInitModel):
+    def __init__(self, config, input_dim, output_dim, output_attentions=False, keep_multihead_output=False):
+        super().__init__(config, output_attentions)
+        self.encoder, self.decoder = fb.make_enc_dec(self.config.fb_name,
+                                                     n_filters=self.config.n_filters,
+                                                     kernel_size=self.config.kernel_size,
+                                                     stride=self.config.stride,
+                                                     sample_rate=self.config.sample_rate,
+                                                     who_is_pinv=self.config.p_inv)
+        # setting n_src=1 in pretraining would lead to size mismatch for
+        # self.masker.mask_net.1.weight and self.masker.mask_net.1.bias
+        self.masker = TDConvNet(in_chan=self.encoder.filterbank.n_feats_out,
+                                out_chan=self.encoder.filterbank.n_feats_out,
+                                n_src=1)
+        # To load pretrained checkpoint, first change the name of those
+        # parameter keys in the state_dict, then load_state_dict(...,
+        # strict=False)
+
+        # self.criterion = PITLossWrapper(singlesrc_neg_sisdr, pit_from='pw_pt')
+        self.criterion = nn.L1Loss()
+
+    # def forward(self, x, head_mask=None, labels=None):
+    def forward(self, x, head_mask=None, wav_label=None, mask_label=None):
+        if len(x.shape) == 2:   # [batch, n_frames]
+            x = x.unsqueeze(1)  # [batch, n_channels, n_frames]
+        tf_rep = self.encoder(x)    # [batch, n_filters, n_frames]
+        est_masks = self.masker(tf_rep) # [batch, 1, n_filters, n_frames]
+        # masked_tf_rep = est_masks * tf_rep.unsqueeze(1)
+        masked_tf_rep = est_masks
+        est_sources = torch_utils.pad_x_to_y(self.decoder(masked_tf_rep), x).squeeze()
+        if wav_label is not None and mask_label is not None:
+            assert mask_label.sum() > 0, 'Without any masking, loss might go NaN. Modify your data preprocessing (utility/mam.py)'
+            loss = self.criterion(est_sources.masked_select(mask_label), wav_label.masked_select(mask_label))
+            return loss, est_sources
+        return est_sources, est_masks
 
  
 ##########################
 # Transformer ConvTasnet #
 ##########################
-class TransformerForWavBert(TransformerInitModel):
+class TransformerForWaveBert(TransformerInitModel):
     def __init__(self, config, input_dim, output_dim, output_attentions=False, keep_multihead_output=False):
         super().__init__(config, output_attentions)
         self.Transformer = TransformerModel(config, input_dim, output_attentions=output_attentions,
