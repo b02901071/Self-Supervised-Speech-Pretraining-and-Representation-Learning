@@ -111,18 +111,23 @@ class Runner():
                                       t_total=self.total_steps)
 
         if self.args.load is not None:
-            all_states = torch.load(self.args.load)
-            try:
+            all_states = torch.load(self.args.load, map_location=self.device)
+            if all_states['Settings']['Paras'].run == 'denoise':
+                del all_states['model']['masker.mask_net.1.weight']
+                del all_states['model']['masker.mask_net.1.bias']
                 self.model.load_state_dict(all_states['model'], strict=False)
-            except Exception as e:
-                print(e)
-                self.model.encoder.load_state_dict(all_states['encoder'])
-                self.model.decoder.load_state_dict(all_states['decoder'])
-                if self.config['model']['tasnet'] == 'ConvTasnet':
-                    self.model.masker.load_state_dict(all_states['masker'])
-                elif self.config['model']['tasnet'] == 'Transformer':
-                    # self.model.MaskerHead.load_state_dict(all_states['SpecHead'])
-                    self.model.Transformer.load_state_dict(all_states['Transformer'])
+            else:
+                try:
+                    self.model.load_state_dict(all_states['model'], strict=False)
+                except Exception as e:
+                    print(e)
+                    self.model.encoder.load_state_dict(all_states['encoder'])
+                    self.model.decoder.load_state_dict(all_states['decoder'])
+                    if self.config['model']['tasnet'] == 'ConvTasnet':
+                        self.model.masker.load_state_dict(all_states['masker'])
+                    elif self.config['model']['tasnet'] == 'Transformer':
+                        # self.model.MaskerHead.load_state_dict(all_states['SpecHead'])
+                        self.model.Transformer.load_state_dict(all_states['Transformer'])
 
 
     def save_model(self, name='states', to_path=None):
