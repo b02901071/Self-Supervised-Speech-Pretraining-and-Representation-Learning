@@ -220,7 +220,7 @@ def process_test_MAM_data(spec, config=None):
     return spec_stacked, pos_enc, attn_mask # (x, pos_enc, attention_mask)
 
 
-def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=None):
+def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=None, norm=True):
     """Process training data for the masked acoustic model"""
 
     dr = config.downsample_rate if config is not None else DR
@@ -324,11 +324,12 @@ def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=
             else:
                 wav_masked[0] += (noise_wav.clone()[0] * 0.5)
 
-        scale = torch.max(
-            torch.max(wav_masked.max(dim=1, keepdim=True)[0], wav_stacked.max(dim=1, keepdim=True)[0]),
-            -torch.min(wav_masked.min(dim=1, keepdim=True)[0], wav_stacked.min(dim=1, keepdim=True)[0]))
-        wav_masked = wav_masked.clone() / scale
-        wav_stacked = wav_stacked.clone() / scale
+        if norm:
+            scale = torch.max(
+                torch.max(wav_masked.max(dim=1, keepdim=True)[0], wav_stacked.max(dim=1, keepdim=True)[0]),
+                -torch.min(wav_masked.min(dim=1, keepdim=True)[0], wav_stacked.min(dim=1, keepdim=True)[0]))
+            wav_masked = wav_masked.clone() / scale
+            wav_stacked = wav_stacked.clone() / scale
         
         valid_batchid = mask_label.view(batch_size, -1).sum(dim=-1).nonzero().view(-1)
         batch_is_valid = len(valid_batchid) > 0

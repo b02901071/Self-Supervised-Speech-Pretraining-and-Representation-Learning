@@ -112,7 +112,7 @@ class Runner():
 
         if self.args.load is not None:
             all_states = torch.load(self.args.load, map_location=self.device)
-            if all_states['Settings']['Paras'].run == 'denoise':
+            if all_states['Settings']['Paras'].run == 'denoise' or all_states['Settings']['Paras'].run == 'wavbert':
                 del all_states['model']['masker.mask_net.1.weight']
                 del all_states['model']['masker.mask_net.1.bias']
                 self.model.load_state_dict(all_states['model'], strict=False)
@@ -133,8 +133,6 @@ class Runner():
     def save_model(self, name='states', to_path=None):
         all_states = {
             'model': self.model.state_dict() if not self.args.multi_gpu else self.model.module.state_dict(),
-            # 'encoder': self.model.encoder.state_dict() if not self.args.multi_gpu else self.model.module.encoder.state_dict(),
-            # 'decoder': self.model.decoder.state_dict() if not self.args.multi_gpu else self.model.module.decoder.state_dict(),
             'Optimizer': self.optimizer.state_dict(),
             'Global_step': self.global_step,
             'Settings': {
@@ -142,15 +140,6 @@ class Runner():
                 'Paras': self.args,
             },
         }
-        # if self.config['model']['tasnet'] == 'ConvTasnet':
-            # all_states.update({
-                # 'masker': self.model.masker.state_dict() if not self.args.multi_gpu else self.model.module.masker.state_dict(),
-            # })
-        # elif self.config['model']['tasnet'] == 'Transformer':
-            # all_states.update({
-                # 'MaskerHead': self.model.MaskerHead.state_dict() if not self.args.multi_gpu else self.model.module.MaskerHead.state_dict(),
-                # 'Transformer': self.model.Transformer.state_dict() if not self.args.multi_gpu else self.model.module.Transformer.state_dict(),
-            # })
 
         if to_path is None:
             new_model_path = '{}/{}-{}.ckpt'.format(self.ckpdir, name, self.global_step)
@@ -172,11 +161,12 @@ class Runner():
             assert(len(batch) == 2), 'dataloader should return (mixture, sources)'
             # Unpack and Hack bucket: Bucketing should cause acoustic feature to have shape 1xBxTxD'
             mixture, sources = batch
-            mixture_scale = torch.max(torch.abs(mixture.clone()), dim=1, keepdim=True)[0]
-            sources_scale = torch.max(torch.max(torch.abs(sources.clone()), dim=1)[0], dim=1, keepdim=True)[0]
-            scale = torch.max(mixture_scale, sources_scale)
-            mixture = mixture.clone() / scale
-            sources = sources.clone() / scale.unsqueeze(1)
+            if self.args.norm:
+                mixture_scale = torch.max(torch.abs(mixture.clone()), dim=1, keepdim=True)[0]
+                sources_scale = torch.max(torch.max(torch.abs(sources.clone()), dim=1)[0], dim=1, keepdim=True)[0]
+                scale = torch.max(mixture_scale, sources_scale)
+                mixture = mixture.clone() / scale
+                sources = sources.clone() / scale.unsqueeze(1)
 
             mixture = mixture.to(device=self.device)
             sources = sources.to(device=self.device)
@@ -199,9 +189,6 @@ class Runner():
                     if self.global_step > self.total_steps: break
                     step += 1
                     
-                    # mixture, sources = batch
-                    # mixture = mixture.to(device=self.device)
-                    # sources = sources.to(device=self.device)
                     mixture, sources = self.process_data(batch)
                     loss, est_sources = self.model(mixture, labels=sources)
                     
