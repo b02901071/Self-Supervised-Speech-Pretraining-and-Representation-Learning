@@ -314,14 +314,14 @@ def process_wav_MAM_data(clean_wav=None, noisy_wav=None, noise_wav=None, config=
                 # # the gradients will be calculated on chosen frames
                 # mask_label[idx, :, chosen_intervals] = 1   
 
-        if not test_reconstruct:
+        if not test_reconstruct or noise:
             # noise augmentation
             dice = random.random()
             if dice < noise_proportion:
                 wav_masked += (noise_wav.clone() * 0.5)
                 # noise_sampler = torch.distributions.Normal(0, 0.2)
                 # wav_masked += noise_sampler.sample(wav_masked.shape).to(device=wav_masked.device)
-            else:
+            elif noise_proportion > 0:
                 wav_masked[0] += (noise_wav.clone()[0] * 0.5)
 
         if norm:

@@ -38,7 +38,7 @@ def get_task_args():
     parser = argparse.ArgumentParser(description='Argument Parser for Upstream Models of the S3PLR project.')
 
     # required
-    parser.add_argument('--run',  choices=['denoise', 'separation', 'wavbert'], help='Select task. \
+    parser.add_argument('--run',  choices=['denoise', 'separation', 'wavbert', 'wav2vec_v2'], help='Select task. \
                         For the transformer models, which type of pre-training (mockingjay, tera, aalbert, etc) \
                         is determined by config file.', required=True)
     parser.add_argument('--config', type=str, help='Path to experiment config.', required=True)
@@ -90,6 +90,8 @@ def run_task(args, config):
         from tasks.separation.runner import Runner
     elif args.run == 'wavbert':
         from tasks.wavbert.runner import Runner
+    elif args.run == 'wav2vec_v2':
+        from tasks.wav2vec_v2.runner import Runner
 
     # mkdir
     if args.ckpdir == '':

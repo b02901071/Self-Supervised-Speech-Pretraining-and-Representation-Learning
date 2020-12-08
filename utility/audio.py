@@ -286,3 +286,14 @@ def plot_attention(attn, path):
     plt.imshow(attn)
     plt.savefig(path, format='png')
     plt.close()
+
+
+def plot_attention_to_numpy(attn):
+    fig = plt.figure(figsize=(5, 5))
+    plt.imshow(attn)
+    plt.savefig('attn.png')
+
+    fig.canvas.draw()
+    data = _save_figure_to_numpy(fig)
+    plt.close()
+    return data
